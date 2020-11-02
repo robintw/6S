@@ -1,3 +1,5 @@
+Note: This is a mirror of a version of 6S (with CMake files) that was hosted by Pete Bunting on Bitbucket
+
 # README #
 
 6SV1 (Second Simulation of a Satellite Signal in the Solar Spectrum, Vector, version 1) is an advanced radiative transfer code designed to simulate the reflection of solar radiation by a coupled atmosphere-surface system for a wide range of atmospheric, spectral and geometrical conditions. It belongs to the group of procedures called Atmospheric correction for the process of removing the effects of the atmosphere on the reflectance values of images taken by satellite or airborne sensors. The code operates on the basis of an SOS (successive orders of scattering) method and accounts for the polarization of radiation in the atmosphere through the calculation of the Q and U components of the Stokes vector. It is a basic code for the calculation of look-up tables in the MODIS atmospheric correction algorithm.
