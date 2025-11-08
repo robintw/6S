@@ -22,12 +22,25 @@ from sixs.aeroso import aeroso
 from sixs.oda550 import oda550
 from sixs.profile_utilities import pressure, presplane
 from sixs.water_models import clearw, lakew
-from sixs.surface_models import sand, vegeta
+from sixs.surface_models import sand, enviro  # , vegeta  # TODO: vegeta not yet implemented
 from sixs.gauss import gauss
 from sixs.abstra import abstra
 from sixs.spectral_interpolation import interp
 from sixs.successive_orders import os as successive_orders_os
-from sixs.brdf_models import enviro
+
+
+# Temporary stub for vegeta until it's implemented
+def vegeta():
+    """Temporary stub - returns typical vegetation spectrum."""
+    # Simple vegetation spectrum approximation (low visible, high NIR)
+    spectrum = np.zeros(1501)
+    for i in range(1501):
+        wl = 0.25 + i * 0.0025
+        if wl < 0.7:
+            spectrum[i] = 0.05  # Low reflectance in visible
+        else:
+            spectrum[i] = 0.5   # High reflectance in NIR
+    return spectrum
 
 
 # Parameter definitions matching paramdef.inc
