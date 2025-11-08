@@ -342,6 +342,325 @@ def kernel(is_val, mu, rm, betal_vals=None):
     return xpl, psl, bp
 
 
+def kernelpol(is_val, mu, rm, alphal_vals=None, betal_vals=None,
+              gammal_vals=None, zetal_vals=None):
+    """
+    Compute polarized scattering kernels and associated Legendre polynomials.
+
+    Extends kernel() to handle polarized radiative transfer with Stokes parameters.
+    Computes P, R, T components of associated Legendre polynomials for polarization
+    and generates six scattering kernel matrices.
+
+    Parameters
+    ----------
+    is_val : int
+        Fourier component index (0, 1, 2, ...)
+    mu : int
+        Number of Gauss angles
+    rm : array_like
+        Cosines of Gauss angles, shape (2*mu+1,)
+    alphal_vals : array_like, optional
+        Legendre expansion coefficients for alpha (a1 component)
+        If None, uses global state
+    betal_vals : array_like, optional
+        Legendre expansion coefficients for beta (a2 component)
+        If None, uses global state
+    gammal_vals : array_like, optional
+        Legendre expansion coefficients for gamma (a3 component)
+        If None, uses global state
+    zetal_vals : array_like, optional
+        Legendre expansion coefficients for zeta (a4 component)
+        If None, uses global state
+
+    Returns
+    -------
+    xpl : ndarray
+        P-component second-order polynomials, shape (2*mu+1,)
+    xrl : ndarray
+        R-component second-order polynomials, shape (2*mu+1,)
+    xtl : ndarray
+        T-component second-order polynomials, shape (2*mu+1,)
+    bp : ndarray
+        P-component scattering kernel, shape (mu+1, 2*mu+1)
+    gr : ndarray
+        R-component scattering kernel, shape (mu+1, 2*mu+1)
+    gt : ndarray
+        T-component scattering kernel, shape (mu+1, 2*mu+1)
+    arr : ndarray
+        Alpha-R kernel matrix, shape (mu+1, 2*mu+1)
+    art : ndarray
+        Alpha-T kernel matrix, shape (mu+1, 2*mu+1)
+    att : ndarray
+        Alpha-T-T kernel matrix, shape (mu+1, 2*mu+1)
+
+    Notes
+    -----
+    Converted from Fortran KERNELPOL.f
+
+    The three components P, R, T correspond to the generalized spherical functions
+    for polarization:
+    - P: Intensity (Stokes I) component
+    - R: Linear polarization Q component (horizontal/vertical)
+    - T: Linear polarization U component (±45°)
+
+    The kernels combine aerosol scattering (via alpha, beta, gamma, zeta coefficients)
+    with molecular Rayleigh scattering to produce the full polarized phase matrix.
+    """
+    global _atm_state
+
+    # Get phase function coefficients
+    if alphal_vals is None:
+        alphal = _atm_state.alphal
+    else:
+        alphal = alphal_vals
+
+    if betal_vals is None:
+        betal = _atm_state.betal
+    else:
+        betal = betal_vals
+
+    if gammal_vals is None:
+        gammal = _atm_state.gammal
+    else:
+        gammal = gammal_vals
+
+    if zetal_vals is None:
+        zetal = _atm_state.zetal
+    else:
+        zetal = zetal_vals
+
+    nquad = _atm_state.nquad
+    max_l = nquad - 3
+    rac3 = np.sqrt(3.0)
+
+    # Initialize arrays
+    # psl: P-component Legendre polynomials
+    # rsl: R-component Legendre polynomials
+    # tsl: T-component Legendre polynomials
+    psl = np.zeros((max_l + 2, 2*mu + 1))
+    rsl = np.zeros((max_l + 2, 2*mu + 1))
+    tsl = np.zeros((max_l + 2, 2*mu + 1))
+
+    # Output arrays
+    xpl = np.zeros(2*mu + 1)
+    xrl = np.zeros(2*mu + 1)
+    xtl = np.zeros(2*mu + 1)
+    bp = np.zeros((mu + 1, 2*mu + 1))
+    gr = np.zeros((mu + 1, 2*mu + 1))
+    gt = np.zeros((mu + 1, 2*mu + 1))
+    arr = np.zeros((mu + 1, 2*mu + 1))
+    art = np.zeros((mu + 1, 2*mu + 1))
+    att = np.zeros((mu + 1, 2*mu + 1))
+
+    # Compute initial Legendre polynomials based on Fourier component
+    if is_val == 0:
+        # m=0 case (azimuthally averaged)
+        for j in range(mu + 1):
+            c = rm[mu + j] if j > 0 else rm[mu]
+            # P-component
+            psl[0, mu + j] = 1.0
+            psl[0, mu - j] = 1.0
+            psl[1, mu + j] = c
+            psl[1, mu - j] = -c
+            xdb = (3.0 * c * c - 1.0) * 0.5
+            if abs(xdb) < 1e-30:
+                xdb = 0.0
+            psl[2, mu + j] = xdb
+            psl[2, mu - j] = xdb
+
+            # R-component (same as P for m=0)
+            rsl[0, mu + j] = 0.0
+            rsl[0, mu - j] = 0.0
+            rsl[1, mu + j] = 0.0
+            rsl[1, mu - j] = 0.0
+            rsl[2, mu + j] = 0.0
+            rsl[2, mu - j] = 0.0
+
+            # T-component (zero for m=0)
+            tsl[0, mu + j] = 0.0
+            tsl[0, mu - j] = 0.0
+            tsl[1, mu + j] = 0.0
+            tsl[1, mu - j] = 0.0
+            tsl[2, mu + j] = 0.0
+            tsl[2, mu - j] = 0.0
+
+    elif is_val == 1:
+        # m=1 case (first Fourier harmonic)
+        for j in range(mu + 1):
+            c = rm[mu + j] if j > 0 else rm[mu]
+            x = 1.0 - c * c
+
+            # P-component
+            psl[0, mu + j] = 0.0
+            psl[0, mu - j] = 0.0
+            psl[1, mu + j] = np.sqrt(x * 0.5)
+            psl[1, mu - j] = np.sqrt(x * 0.5)
+            psl[2, mu + j] = c * psl[1, mu + j] * rac3
+            psl[2, mu - j] = -psl[2, mu + j]
+
+            # R-component
+            rsl[0, mu + j] = 0.0
+            rsl[0, mu - j] = 0.0
+            rsl[1, mu + j] = c * np.sqrt(x * 0.5)
+            rsl[1, mu - j] = rsl[1, mu + j]
+            xdb = (1.0 + c * c) * np.sqrt(x * 0.5) * rac3 * 0.5
+            if abs(xdb) < 1e-30:
+                xdb = 0.0
+            rsl[2, mu + j] = xdb
+            rsl[2, mu - j] = -xdb
+
+            # T-component
+            tsl[0, mu + j] = 0.0
+            tsl[0, mu - j] = 0.0
+            tsl[1, mu + j] = 0.0
+            tsl[1, mu - j] = 0.0
+            tsl[2, mu + j] = c * rac3 * np.sqrt(x * 0.5)
+            tsl[2, mu - j] = tsl[2, mu + j]
+
+    else:
+        # m >= 2 case (higher Fourier harmonics)
+        a = 1.0
+        for i in range(1, is_val + 1):
+            a = a * np.sqrt((i + is_val) / i) * 0.5
+
+        for j in range(mu + 1):
+            c = rm[mu + j] if j > 0 else rm[mu]
+            xx = 1.0 - c * c
+
+            # P-component
+            psl[is_val - 1, mu + j] = 0.0
+            psl[is_val - 1, mu - j] = 0.0
+            xdb = a * xx ** (is_val * 0.5)
+            if abs(xdb) < 1e-30:
+                xdb = 0.0
+            psl[is_val, mu + j] = xdb
+            psl[is_val, mu - j] = xdb
+
+            # R-component
+            rsl[is_val - 1, mu + j] = 0.0
+            rsl[is_val - 1, mu - j] = 0.0
+            xdb = a * c * xx ** (is_val * 0.5)
+            if abs(xdb) < 1e-30:
+                xdb = 0.0
+            rsl[is_val, mu + j] = xdb
+            rsl[is_val, mu - j] = xdb
+
+            # T-component
+            tsl[is_val - 1, mu + j] = 0.0
+            tsl[is_val - 1, mu - j] = 0.0
+            tsl[is_val, mu + j] = 0.0
+            tsl[is_val, mu - j] = 0.0
+
+    # Recurrence relations for higher order polynomials
+    k = 2
+    if is_val > 2:
+        k = is_val
+
+    if k < max_l:
+        ig = -1
+        if is_val == 1:
+            ig = 1
+
+        for l in range(k, max_l):
+            lp = l + 1
+            lm = l - 1
+            a = (2 * l + 1.0) / np.sqrt((l + is_val + 1.0) * (l - is_val + 1.0))
+            b = np.sqrt(float((l + is_val) * (l - is_val))) / (2.0 * l + 1.0)
+            c_coef = np.sqrt(float((l + is_val + 1) * (l + is_val))) / (2.0 * l + 1.0)
+
+            for j in range(mu + 1):
+                c = rm[mu + j] if j > 0 else rm[mu]
+
+                # P-component recurrence
+                xdb = a * (c * psl[l, mu + j] - b * psl[lm, mu + j])
+                if abs(xdb) < 1e-30:
+                    xdb = 0.0
+                psl[lp, mu + j] = xdb
+                if j > 0:
+                    psl[lp, mu - j] = ig * psl[lp, mu + j]
+
+                # R-component recurrence
+                xdb = a * (c * rsl[l, mu + j] - b * rsl[lm, mu + j]) - c_coef * psl[l, mu + j]
+                if abs(xdb) < 1e-30:
+                    xdb = 0.0
+                rsl[lp, mu + j] = xdb
+                if j > 0:
+                    rsl[lp, mu - j] = ig * rsl[lp, mu + j]
+
+                # T-component recurrence
+                xdb = a * (c * tsl[l, mu + j] - b * tsl[lm, mu + j])
+                if abs(xdb) < 1e-30:
+                    xdb = 0.0
+                tsl[lp, mu + j] = xdb
+                if j > 0:
+                    tsl[lp, mu - j] = ig * tsl[lp, mu + j]
+
+            ig = -ig
+
+    # Extract second-order polynomials
+    for j in range(2*mu + 1):
+        xpl[j] = psl[2, j]
+        xrl[j] = rsl[2, j]
+        xtl[j] = tsl[2, j]
+
+    # Compute scattering kernels
+    for j in range(mu + 1):
+        for k_idx in range(2*mu + 1):
+            sbp = 0.0
+            sgr = 0.0
+            sgt = 0.0
+            sarr = 0.0
+            sart = 0.0
+            satt = 0.0
+
+            if is_val <= max_l:
+                for l in range(is_val, max_l + 1):
+                    # Get phase function coefficients
+                    al = alphal[l]
+                    bl = betal[l]
+                    gl = gammal[l]
+                    zl = zetal[l]
+
+                    # Get Legendre polynomials at j and k
+                    pj = psl[l, mu + j]
+                    pk = psl[l, k_idx]
+                    rj = rsl[l, mu + j]
+                    rk = rsl[l, k_idx]
+                    tj = tsl[l, mu + j]
+                    tk = tsl[l, k_idx]
+
+                    # Accumulate kernel components
+                    sbp += bl * pj * pk
+                    sgr += gl * rj * pk
+                    sgt += -zl * tj * pk
+                    sarr += al * rj * rk
+                    sart += zl * rj * tk
+                    satt += al * tj * tk
+
+            # Apply threshold
+            if abs(sbp) < 1e-30:
+                sbp = 0.0
+            if abs(sgr) < 1e-30:
+                sgr = 0.0
+            if abs(sgt) < 1e-30:
+                sgt = 0.0
+            if abs(sarr) < 1e-30:
+                sarr = 0.0
+            if abs(sart) < 1e-30:
+                sart = 0.0
+            if abs(satt) < 1e-30:
+                satt = 0.0
+
+            bp[j, k_idx] = sbp
+            gr[j, k_idx] = sgr
+            gt[j, k_idx] = sgt
+            arr[j, k_idx] = sarr
+            art[j, k_idx] = sart
+            att[j, k_idx] = satt
+
+    return xpl, xrl, xtl, bp, gr, gt, arr, art, att
+
+
 def aero_prof(ta, piz, tr, hr, nt, xmus):
     """
     Divide atmosphere into layers based on aerosol profile.
@@ -1477,12 +1796,954 @@ def os(iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
     return xl, xlphim, rolut, filut, nfilut
 
 
+def ospol(iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
+          phirad, nt, mu, naz, rm, gb, rp):
+    """
+    Successive orders of scattering with full polarization.
+
+    Computes polarized radiative transfer with Stokes parameters (I, Q, U)
+    using successive orders of scattering. Extends os() to include polarization.
+
+    Parameters
+    ----------
+    iaer_prof : int
+        Aerosol profile flag (0=standard, 1=user-defined)
+    tamoy : float
+        Total aerosol optical depth
+    trmoy : float
+        Total Rayleigh optical depth
+    pizmoy : float
+        Aerosol single scattering albedo
+    tamoyp : float
+        Aerosol optical depth above observation plane
+    trmoyp : float
+        Rayleigh optical depth above observation plane
+    palt : float
+        Observation altitude (km, 0-900)
+    phirad : float
+        Azimuthal angle (radians)
+    nt : int
+        Number of atmospheric layers
+    mu : int
+        Number of Gauss quadrature points
+    naz : int
+        Number of azimuth angles
+    rm : ndarray
+        Gauss quadrature angles (-mu:mu)
+    gb : ndarray
+        Gauss quadrature weights (-mu:mu)
+    rp : ndarray
+        Azimuth angles for output (naz)
+
+    Returns
+    -------
+    xli : ndarray
+        Stokes I radiances at angles (-mu:mu, naz)
+    xlq : ndarray
+        Stokes Q radiances at angles (-mu:mu, naz)
+    xlu : ndarray
+        Stokes U radiances at angles (-mu:mu, naz)
+    xlphim : ndarray
+        Intensity radiances at plane level (nfi)
+    rolut : ndarray
+        Stokes I look-up table radiances (mu, 41)
+    rolutq : ndarray
+        Stokes Q look-up table radiances (mu, 41)
+    rolutu : ndarray
+        Stokes U look-up table radiances (mu, 41)
+    filut : ndarray
+        Look-up table azimuth angles (mu, 41)
+    nfilut : ndarray
+        Number of angles per viewing angle (mu)
+
+    Notes
+    -----
+    Converted from Fortran OSPOL.f (983 lines)
+
+    This function extends os() to handle polarized radiative transfer with
+    three Stokes parameters (I, Q, U). The fourth parameter (V, circular
+    polarization) is not used in atmospheric scattering.
+
+    The algorithm:
+    1. Discretizes atmosphere into layers (same as os)
+    2. Sets up polarization phase function parameters
+    3. Performs Fourier decomposition with polarized kernels
+    4. For each Fourier component:
+       - Computes polarized scattering kernels (P, R, T components)
+       - Calculates source functions for I, Q, U with polarization coupling
+       - Integrates vertically (up and down) for all Stokes parameters
+       - Iterates successive orders until convergence
+       - Accumulates Fourier components with proper phase
+    5. Returns angle-dependent Stokes parameters
+    """
+    import numpy as np_module
+    from sixs.successive_orders import _atm_state
+
+    # Constants
+    hr = 8.0  # Rayleigh scale height (km)
+    acu = 1.0e-20
+    acu2 = 1.0e-4
+    pi = np_module.pi
+
+    snt = nt
+    ta = tamoy
+    tr = trmoy
+    trp = trmoy - trmoyp
+    tap = tamoy - tamoyp
+    piz = pizmoy
+
+    iplane = 0
+    mum1 = mu - 1
+
+    # Compute aerosol scale height
+    if palt <= 900.0 and palt > 0.0:
+        if tap > 1.0e-03:
+            ha = -palt / np.log(tap / ta)
+        else:
+            ha = 2.0
+        ntp = nt - 1
+    else:
+        ha = 2.0
+        ntp = nt
+
+    xmus = -rm[mu]
+
+    # Atmospheric layering
+    h = np_module.zeros(nt + 1)
+    ch = np_module.zeros(nt + 1)
+    ydel = np_module.zeros(nt + 1)
+    xdel = np_module.zeros(nt + 1)
+    altc = np_module.zeros(nt + 1)
+
+    # Case 1: Pure Rayleigh
+    if ta <= acu2 and tr > ta:
+        for j in range(ntp + 1):
+            h[j] = j * tr / ntp
+            ch[j] = np_module.exp(-h[j] / xmus) / 2.0
+            ydel[j] = 1.0
+            xdel[j] = 0.0
+            if j == 0:
+                altc[j] = 300.0
+            else:
+                altc[j] = -np_module.log(h[j] / tr) * hr
+
+    # Case 2: Pure aerosol
+    if tr <= acu2 and ta > tr:
+        for j in range(ntp + 1):
+            h[j] = j * ta / ntp
+            ch[j] = np_module.exp(-h[j] / xmus) / 2.0
+            ydel[j] = 0.0
+            xdel[j] = piz
+            if j == 0:
+                altc[j] = 300.0
+            else:
+                altc[j] = -np_module.log(h[j] / ta) * ha
+
+    # Case 3: Mixed Rayleigh-aerosol (standard profile)
+    if tr > acu2 and ta > acu2 and iaer_prof == 0:
+        ydel[0] = 1.0
+        xdel[0] = 0.0
+        h[0] = 0.0
+        ch[0] = 0.5
+        altc[0] = 300.0
+        zx = 300.0
+
+        for it in range(ntp + 1):
+            if it == 0:
+                yy = 0.0
+                dd = 0.0
+            else:
+                yy = h[it - 1]
+                dd = ydel[it - 1]
+
+            zx, delta = discre(ta, ha, tr, hr, it, ntp, yy, dd, 300.0, 0.0)
+
+            xx = -zx / ha
+            if xx <= -20.0:
+                ca = 0.0
+            else:
+                ca = ta * np_module.exp(xx)
+
+            xx = -zx / hr
+            cr = tr * np_module.exp(xx)
+            h[it] = cr + ca
+            altc[it] = zx
+            ch[it] = np_module.exp(-h[it] / xmus) / 2.0
+            cr = cr / hr
+            ca = ca / ha
+            ratio = cr / (cr + ca)
+            xdel[it] = (1.0 - ratio) * piz
+            ydel[it] = ratio
+
+    # Case 4: Mixed Rayleigh-aerosol (user profile)
+    if tr > acu2 and ta > acu2 and iaer_prof == 1:
+        h_tmp, ch_tmp, ydel_tmp, xdel_tmp, altc_tmp = aero_prof(
+            ta, piz, tr, hr, ntp, xmus
+        )
+        h[:ntp+1] = h_tmp[:ntp+1]
+        ch[:ntp+1] = ch_tmp[:ntp+1]
+        ydel[:ntp+1] = ydel_tmp[:ntp+1]
+        xdel[:ntp+1] = xdel_tmp[:ntp+1]
+        altc[:ntp+1] = altc_tmp[:ntp+1]
+
+    # Update plane layer if necessary
+    if ntp == nt - 1:
+        taup = tap + trp
+        iplane = -1
+        for i in range(ntp + 1):
+            if taup >= h[i]:
+                iplane = i
+
+        th = 0.0005
+        xt1 = abs(h[iplane] - taup)
+        xt2 = abs(h[iplane + 1] - taup)
+
+        if xt1 > th and xt2 > th:
+            # Shift layers
+            for i in range(nt, iplane, -1):
+                xdel[i] = xdel[i - 1]
+                ydel[i] = ydel[i - 1]
+                h[i] = h[i - 1]
+                altc[i] = altc[i - 1]
+                ch[i] = ch[i - 1]
+        else:
+            nt = ntp
+            if xt2 < xt1:
+                iplane = iplane + 1
+
+        h[iplane] = taup
+        if tr > acu2 and ta > acu2:
+            ca = ta * np_module.exp(-palt / ha)
+            cr = tr * np_module.exp(-palt / hr)
+            h[iplane] = ca + cr
+            cr = cr / hr
+            ca = ca / ha
+            ratio = cr / (cr + ca)
+            xdel[iplane] = (1.0 - ratio) * piz
+            ydel[iplane] = ratio
+            altc[iplane] = palt
+            ch[iplane] = np_module.exp(-h[iplane] / xmus) / 2.0
+
+        if tr > acu2 and ta <= acu2:
+            ydel[iplane] = 1.0
+            xdel[iplane] = 0.0
+            altc[iplane] = palt
+
+        if tr <= acu2 and ta > acu2:
+            ydel[iplane] = 0.0
+            xdel[iplane] = 1.0 * piz
+            altc[iplane] = palt
+
+    # Initialize output arrays
+    phi = phirad
+    nfi = 13  # Number of azimuth angles for plane observation
+    xli = np_module.zeros((2*mu + 1, naz))
+    xlq = np_module.zeros((2*mu + 1, naz))
+    xlu = np_module.zeros((2*mu + 1, naz))
+    xlphim = np_module.zeros(nfi)
+
+    # Look-up table initialization
+    max_lut_angles = 41
+    rolut = np_module.zeros((mu, max_lut_angles))
+    rolutq = np_module.zeros((mu, max_lut_angles))
+    rolutu = np_module.zeros((mu, max_lut_angles))
+    filut = np_module.zeros((mu, max_lut_angles))
+    nfilut = np_module.zeros(mu, dtype=np_module.int32)
+
+    its = np_module.arccos(xmus) * 180.0 / pi
+    for i in range(mu):
+        lutmuv = rm[mu + 1 + i]  # Positive mu values
+        luttv = np_module.arccos(lutmuv) * 180.0 / pi
+        iscama = 180.0 - abs(luttv - its)
+        iscami = 180.0 - (luttv + its)
+        nbisca = int((iscama - iscami) / 4.0) + 1
+        nbisca = min(nbisca, max_lut_angles)
+        nfilut[i] = nbisca
+        filut[i, 0] = 0.0
+        filut[i, nbisca - 1] = 180.0
+        scaa = iscama
+        for j in range(1, nbisca - 1):
+            scaa = scaa - 4.0
+            cscaa = np_module.cos(scaa * pi / 180.0)
+            cfi = -(cscaa + xmus * lutmuv) / (
+                np_module.sqrt(1.0 - xmus**2) * np_module.sqrt(1.0 - lutmuv**2)
+            )
+            cfi = max(-1.0, min(1.0, cfi))
+            filut[i, j] = np_module.arccos(cfi) * 180.0 / pi
+
+    # Rayleigh polarization phase function parameters
+    delta = _atm_state.delta
+    aaaa = delta / (2.0 - delta)
+    ron = (1.0 - aaaa) / (1.0 + 2.0 * aaaa)
+    beta0 = 1.0
+    beta2 = 0.5 * ron
+    gamma2 = -ron * np_module.sqrt(1.5)
+    alpha2 = 3.0 * ron
+
+    # Fourier decomposition
+    i4 = np_module.zeros(2*mu + 1)
+    q4 = np_module.zeros(2*mu + 1)
+    u4 = np_module.zeros(2*mu + 1)
+    iborm = _atm_state.nquad
+    if ta <= acu2:
+        iborm = 2
+    if abs(xmus - 1.0) < 1.0e-06:
+        iborm = 0
+
+    # Main Fourier loop
+    for is_val in range(iborm + 1):
+        ig = 1
+        roIavion = np_module.zeros(4)  # indices -1:2 → 0:3
+        roQavion = np_module.zeros(4)
+        roUavion = np_module.zeros(4)
+        i3 = np_module.zeros(2*mu + 1)
+        q3 = np_module.zeros(2*mu + 1)
+        u3 = np_module.zeros(2*mu + 1)
+
+        # Kernel computations
+        xpl, xrl, xtl, bp, gr, gt, arr, art, att = kernelpol(is_val, mu, rm)
+
+        if is_val > 0:
+            beta0_curr = 0.0
+        else:
+            beta0_curr = beta0
+
+        # Primary scattering source function
+        i2 = np_module.zeros((nt + 1, 2*mu + 1))
+        q2 = np_module.zeros((nt + 1, 2*mu + 1))
+        u2 = np_module.zeros((nt + 1, 2*mu + 1))
+
+        for j in range(2*mu + 1):
+            if is_val <= 2:
+                spl = xpl[mu]  # xpl(0)
+                sa1 = beta0_curr + beta2 * xpl[j] * spl
+                sa2 = bp[0, j]
+                sb1 = gamma2 * xrl[j] * spl
+                sb2 = gr[0, j]
+                sc1 = gamma2 * xtl[j] * spl
+                sc2 = gt[0, j]
+            else:
+                sa2 = bp[0, j]
+                sa1 = 0.0
+                sb2 = gr[0, j]
+                sb1 = 0.0
+                sc2 = gt[0, j]
+                sc1 = 0.0
+
+            for k in range(nt + 1):
+                c = ch[k]
+                a = ydel[k]
+                b = xdel[k]
+                i2[k, j] = c * (sa2 * b + sa1 * a)
+                q2[k, j] = c * (sb2 * b + sb1 * a)
+                u2[k, j] = -c * (sc2 * b + sc1 * a)
+
+        # Vertical integration - primary upward radiation
+        i1 = np_module.zeros((nt + 1, 2*mu + 1))
+        q1 = np_module.zeros((nt + 1, 2*mu + 1))
+        u1 = np_module.zeros((nt + 1, 2*mu + 1))
+
+        for k in range(mu + 1, 2*mu + 1):  # Positive mu
+            i1[nt, k] = 0.0
+            q1[nt, k] = 0.0
+            u1[nt, k] = 0.0
+            zi1 = i1[nt, k]
+            zq1 = q1[nt, k]
+            zu1 = u1[nt, k]
+            yy = rm[k]
+            for i in range(nt - 1, -1, -1):
+                jj = i + 1
+                f = h[jj] - h[i]
+                c = np_module.exp(-f / yy)
+                d = 1.0 - c
+                xx = h[i] - h[jj] * c
+
+                a_coef = (i2[jj, k] - i2[i, k]) / f
+                b_coef = i2[i, k] - a_coef * h[i]
+                zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                i1[i, k] = zi1
+
+                a_coef = (q2[jj, k] - q2[i, k]) / f
+                b_coef = q2[i, k] - a_coef * h[i]
+                zq1 = c * zq1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                q1[i, k] = zq1
+
+                a_coef = (u2[jj, k] - u2[i, k]) / f
+                b_coef = u2[i, k] - a_coef * h[i]
+                zu1 = c * zu1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                u1[i, k] = zu1
+
+        # Vertical integration - primary downward radiation
+        for k in range(mu):  # Negative mu
+            i1[0, k] = 0.0
+            q1[0, k] = 0.0
+            u1[0, k] = 0.0
+            zi1 = i1[0, k]
+            zq1 = q1[0, k]
+            zu1 = u1[0, k]
+            yy = rm[k]
+            for i in range(1, nt + 1):
+                jj = i - 1
+                f = h[i] - h[jj]
+                c = np_module.exp(f / yy)
+                d = 1.0 - c
+                xx = h[i] - h[jj] * c
+
+                a_coef = (i2[i, k] - i2[jj, k]) / f
+                b_coef = i2[i, k] - a_coef * h[i]
+                zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                i1[i, k] = zi1
+
+                a_coef = (q2[i, k] - q2[jj, k]) / f
+                b_coef = q2[i, k] - a_coef * h[i]
+                zq1 = c * zq1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                q1[i, k] = zq1
+
+                a_coef = (u2[i, k] - u2[jj, k]) / f
+                b_coef = u2[i, k] - a_coef * h[i]
+                zu1 = c * zu1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                u1[i, k] = zu1
+
+        # Initialize for successive orders
+        inm1 = np_module.zeros(2*mu + 1)
+        inm2 = np_module.zeros(2*mu + 1)
+        qnm1 = np_module.zeros(2*mu + 1)
+        qnm2 = np_module.zeros(2*mu + 1)
+        unm1 = np_module.zeros(2*mu + 1)
+        unm2 = np_module.zeros(2*mu + 1)
+
+        for k in range(2*mu + 1):
+            if k < mu:
+                index = nt
+            else:
+                index = 0
+            inm1[k] = i1[index, k]
+            inm2[k] = i1[index, k]
+            i3[k] = i1[index, k]
+            qnm1[k] = q1[index, k]
+            qnm2[k] = q1[index, k]
+            q3[k] = q1[index, k]
+            unm1[k] = u1[index, k]
+            unm2[k] = u1[index, k]
+            u3[k] = u1[index, k]
+
+        roIavion[3] = i1[iplane, 2*mu]  # roIavion(2)
+        roIavion[0] = i1[iplane, 2*mu]  # roIavion(-1)
+        roQavion[3] = q1[iplane, 2*mu]
+        roQavion[0] = q1[iplane, 2*mu]
+        roUavion[3] = u1[iplane, 2*mu]
+        roUavion[0] = u1[iplane, 2*mu]
+
+        # Loop on successive orders
+        igmax = _atm_state.igmax
+        for ig in range(2, igmax + 1):
+            # Multiple scattering source function
+            if is_val <= 2:
+                for k in range(mu + 1, 2*mu + 1):
+                    xpk = xpl[k]
+                    xrk = xrl[k]
+                    xtk = xtl[k]
+                    ypk = xpl[2*mu - k]
+                    yrk = xrl[2*mu - k]
+                    ytk = xtl[2*mu - k]
+                    for i in range(nt + 1):
+                        ii1 = 0.0
+                        ii2 = 0.0
+                        qq1 = 0.0
+                        qq2 = 0.0
+                        uu1 = 0.0
+                        uu2 = 0.0
+                        x = xdel[i]
+                        y = ydel[i]
+                        for j in range(mu + 1, 2*mu + 1):
+                            z = gb[j]
+                            xpj = xpl[j]
+                            xrj = xrl[j]
+                            xtj = xtl[j]
+                            ypj = xpl[2*mu - j]
+                            yrj = xrl[2*mu - j]
+                            ytj = xtl[2*mu - j]
+                            xi1 = i1[i, j]
+                            xi2 = i1[i, 2*mu - j]
+                            xq1 = q1[i, j]
+                            xq2 = q1[i, 2*mu - j]
+                            xu1 = u1[i, j]
+                            xu2 = u1[i, 2*mu - j]
+
+                            bpjk = bp[j - mu, k] * x + y * (beta0_curr + beta2 * xpj * xpk)
+                            bpjmk = bp[j - mu, 2*mu - k] * x + y * (beta0_curr + beta2 * xpj * ypk)
+                            gtjk = gt[j - mu, k] * x + y * gamma2 * xpj * xtk
+                            gtjmk = gt[j - mu, 2*mu - k] * x + y * gamma2 * xpj * ytk
+                            gtkj = gt[k - mu, j] * x + y * gamma2 * xpk * xtj
+                            gtkmj = gt[k - mu, 2*mu - j] * x + y * gamma2 * xpk * ytj
+                            grjk = gr[j - mu, k] * x + y * gamma2 * xpj * xrk
+                            grjmk = gr[j - mu, 2*mu - k] * x + y * gamma2 * xpj * yrk
+                            grkj = gr[k - mu, j] * x + y * gamma2 * xpk * xrj
+                            grkmj = gr[k - mu, 2*mu - j] * x + y * gamma2 * xpk * yrj
+                            arrjk = arr[j - mu, k] * x + y * alpha2 * xrj * xrk
+                            arrjmk = arr[j - mu, 2*mu - k] * x + y * alpha2 * xrj * yrk
+                            artjk = art[j - mu, k] * x + y * alpha2 * xtj * xrk
+                            artjmk = art[j - mu, 2*mu - k] * x + y * alpha2 * xtj * yrk
+                            artkj = art[k - mu, j] * x + y * alpha2 * xtk * xrj
+                            artkmj = art[k - mu, 2*mu - j] * x + y * alpha2 * xtk * yrj
+                            attjk = att[j - mu, k] * x + y * alpha2 * xtj * xtk
+                            attjmk = att[j - mu, 2*mu - k] * x + y * alpha2 * xtj * ytk
+
+                            xdb = xi1 * bpjk + xi2 * bpjmk + xq1 * grkj + xq2 * grkmj
+                            xdb = xdb - xu1 * gtkj - xu2 * gtkmj
+                            ii2 += xdb * z
+                            xdb = xi1 * bpjmk + xi2 * bpjk + xq1 * grkmj + xq2 * grkj
+                            xdb = xdb + xu1 * gtkmj + xu2 * gtkj
+                            ii1 += xdb * z
+                            xdb = xi1 * grjk + xi2 * grjmk + xq1 * arrjk + xq2 * arrjmk
+                            xdb = xdb - xu1 * artjk + xu2 * artjmk
+                            qq2 += xdb * z
+                            xdb = xi1 * grjmk + xi2 * grjk + xq1 * arrjmk + xq2 * arrjk
+                            xdb = xdb - xu1 * artjmk + xu2 * artjk
+                            qq1 += xdb * z
+                            xdb = xi1 * gtjk - xi2 * gtjmk + xq1 * artkj + xq2 * artkmj
+                            xdb = xdb - xu1 * attjk - xu2 * attjmk
+                            uu2 -= xdb * z
+                            xdb = xi1 * gtjmk - xi2 * gtjk - xq1 * artkmj - xq2 * artkj
+                            xdb = xdb - xu1 * attjmk - xu2 * attjk
+                            uu1 -= xdb * z
+
+                        if abs(ii2) < 1.0e-30:
+                            ii2 = 0.0
+                        if abs(ii1) < 1.0e-30:
+                            ii1 = 0.0
+                        if abs(qq2) < 1.0e-30:
+                            qq2 = 0.0
+                        if abs(qq1) < 1.0e-30:
+                            qq1 = 0.0
+                        if abs(uu2) < 1.0e-30:
+                            uu2 = 0.0
+                        if abs(uu1) < 1.0e-30:
+                            uu1 = 0.0
+                        i2[i, k] = ii2
+                        i2[i, 2*mu - k] = ii1
+                        q2[i, k] = qq2
+                        q2[i, 2*mu - k] = qq1
+                        u2[i, k] = uu2
+                        u2[i, 2*mu - k] = uu1
+            else:
+                for k in range(mu + 1, 2*mu + 1):
+                    for i in range(nt + 1):
+                        ii1 = 0.0
+                        ii2 = 0.0
+                        qq1 = 0.0
+                        qq2 = 0.0
+                        uu1 = 0.0
+                        uu2 = 0.0
+                        x = xdel[i]
+                        for j in range(mu + 1, 2*mu + 1):
+                            z = gb[j]
+                            xi1 = i1[i, j]
+                            xi2 = i1[i, 2*mu - j]
+                            xq1 = q1[i, j]
+                            xq2 = q1[i, 2*mu - j]
+                            xu1 = u1[i, j]
+                            xu2 = u1[i, 2*mu - j]
+
+                            bpjk = bp[j - mu, k] * x
+                            bpjmk = bp[j - mu, 2*mu - k] * x
+                            gtjk = gt[j - mu, k] * x
+                            gtjmk = gt[j - mu, 2*mu - k] * x
+                            gtkj = gt[k - mu, j] * x
+                            gtkmj = gt[k - mu, 2*mu - j] * x
+                            grjk = gr[j - mu, k] * x
+                            grjmk = gr[j - mu, 2*mu - k] * x
+                            grkj = gr[k - mu, j] * x
+                            grkmj = gr[k - mu, 2*mu - j] * x
+                            arrjk = arr[j - mu, k] * x
+                            arrjmk = arr[j - mu, 2*mu - k] * x
+                            artjk = art[j - mu, k] * x
+                            artjmk = art[j - mu, 2*mu - k] * x
+                            artkj = art[k - mu, j] * x
+                            artkmj = art[k - mu, 2*mu - j] * x
+                            attjk = att[j - mu, k] * x
+                            attjmk = att[j - mu, 2*mu - k] * x
+
+                            xdb = xi1 * bpjk + xi2 * bpjmk + xq1 * grkj + xq2 * grkmj
+                            xdb = xdb - xu1 * gtkj - xu2 * gtkmj
+                            ii2 += xdb * z
+                            xdb = xi1 * bpjmk + xi2 * bpjk + xq1 * grkmj + xq2 * grkj
+                            xdb = xdb + xu1 * gtkmj + xu2 * gtkj
+                            ii1 += xdb * z
+                            xdb = xi1 * grjk + xi2 * grjmk + xq1 * arrjk + xq2 * arrjmk
+                            xdb = xdb - xu1 * artjk + xu2 * artjmk
+                            qq2 += xdb * z
+                            xdb = xi1 * grjmk + xi2 * grjk + xq1 * arrjmk + xq2 * arrjk
+                            xdb = xdb - xu1 * artjmk + xu2 * artjk
+                            qq1 += xdb * z
+                            xdb = xi1 * gtjk - xi2 * gtjmk + xq1 * artkj + xq2 * artkmj
+                            xdb = xdb - xu1 * attjk - xu2 * attjmk
+                            uu2 -= xdb * z
+                            xdb = xi1 * gtjmk - xi2 * gtjk - xq1 * artkmj - xq2 * artkj
+                            xdb = xdb - xu1 * attjmk - xu2 * attjk
+                            uu1 -= xdb * z
+
+                        if abs(ii2) < 1.0e-30:
+                            ii2 = 0.0
+                        if abs(ii1) < 1.0e-30:
+                            ii1 = 0.0
+                        if abs(qq2) < 1.0e-30:
+                            qq2 = 0.0
+                        if abs(qq1) < 1.0e-30:
+                            qq1 = 0.0
+                        if abs(uu2) < 1.0e-30:
+                            uu2 = 0.0
+                        if abs(uu1) < 1.0e-30:
+                            uu1 = 0.0
+                        i2[i, k] = ii2
+                        i2[i, 2*mu - k] = ii1
+                        q2[i, k] = qq2
+                        q2[i, 2*mu - k] = qq1
+                        u2[i, k] = uu2
+                        u2[i, 2*mu - k] = uu1
+
+            # Vertical integration - upward
+            for k in range(mu + 1, 2*mu + 1):
+                i1[nt, k] = 0.0
+                q1[nt, k] = 0.0
+                u1[nt, k] = 0.0
+                zi1 = i1[nt, k]
+                zq1 = q1[nt, k]
+                zu1 = u1[nt, k]
+                yy = rm[k]
+                for i in range(nt - 1, -1, -1):
+                    jj = i + 1
+                    f = h[jj] - h[i]
+                    c = np_module.exp(-f / yy)
+                    d = 1.0 - c
+                    xx = h[i] - h[jj] * c
+
+                    a_coef = (i2[jj, k] - i2[i, k]) / f
+                    b_coef = i2[i, k] - a_coef * h[i]
+                    zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zi1) <= 1.0e-20:
+                        zi1 = 0.0
+                    i1[i, k] = zi1
+
+                    a_coef = (q2[jj, k] - q2[i, k]) / f
+                    b_coef = q2[i, k] - a_coef * h[i]
+                    zq1 = c * zq1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zq1) <= 1.0e-20:
+                        zq1 = 0.0
+                    q1[i, k] = zq1
+
+                    a_coef = (u2[jj, k] - u2[i, k]) / f
+                    b_coef = u2[i, k] - a_coef * h[i]
+                    zu1 = c * zu1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zu1) <= 1.0e-20:
+                        zu1 = 0.0
+                    u1[i, k] = zu1
+
+            # Vertical integration - downward
+            for k in range(mu):
+                i1[0, k] = 0.0
+                q1[0, k] = 0.0
+                u1[0, k] = 0.0
+                zi1 = i1[0, k]
+                zq1 = q1[0, k]
+                zu1 = u1[0, k]
+                yy = rm[k]
+                for i in range(1, nt + 1):
+                    jj = i - 1
+                    f = h[i] - h[jj]
+                    c = np_module.exp(f / yy)
+                    d = 1.0 - c
+                    xx = h[i] - h[jj] * c
+
+                    a_coef = (i2[i, k] - i2[jj, k]) / f
+                    b_coef = i2[i, k] - a_coef * h[i]
+                    zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zi1) <= 1.0e-20:
+                        zi1 = 0.0
+                    i1[i, k] = zi1
+
+                    a_coef = (q2[i, k] - q2[jj, k]) / f
+                    b_coef = q2[i, k] - a_coef * h[i]
+                    zq1 = c * zq1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zq1) <= 1.0e-20:
+                        zq1 = 0.0
+                    q1[i, k] = zq1
+
+                    a_coef = (u2[i, k] - u2[jj, k]) / f
+                    b_coef = u2[i, k] - a_coef * h[i]
+                    zu1 = c * zu1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zu1) <= 1.0e-20:
+                        zu1 = 0.0
+                    u1[i, k] = zu1
+
+            # Extract current order
+            in_current = np_module.zeros(2*mu + 1)
+            qn_current = np_module.zeros(2*mu + 1)
+            un_current = np_module.zeros(2*mu + 1)
+            for k in range(2*mu + 1):
+                if k < mu:
+                    index = nt
+                else:
+                    index = 0
+                in_current[k] = i1[index, k]
+                qn_current[k] = q1[index, k]
+                un_current[k] = u1[index, k]
+
+            roIavion[1] = i1[iplane, 2*mu]  # roIavion(0)
+            roQavion[1] = q1[iplane, 2*mu]
+            roUavion[1] = u1[iplane, 2*mu]
+
+            # Convergence test (geometric series)
+            if ig > 2:
+                z = 0.0
+                # Test I component at plane
+                a1 = abs(roIavion[3])  # roIavion(2)
+                d1 = abs(roIavion[2])  # roIavion(1)
+                g1 = abs(roIavion[1])  # roIavion(0)
+                r1 = abs(roIavion[0])  # roIavion(-1)
+                if a1 >= acu and d1 >= acu and r1 >= acu:
+                    a1 = roIavion[3]
+                    d1 = roIavion[2]
+                    g1 = roIavion[1]
+                    r1 = roIavion[0]
+                    if abs(1.0 - g1/d1) > 1e-10:
+                        y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/r1))
+                        z = max(z, y)
+
+                # Test Q component at plane
+                a1 = abs(roQavion[3])
+                d1 = abs(roQavion[2])
+                g1 = abs(roQavion[1])
+                r1 = abs(roQavion[0])
+                if a1 >= acu and d1 >= acu and r1 >= acu:
+                    a1 = roQavion[3]
+                    d1 = roQavion[2]
+                    g1 = roQavion[1]
+                    r1 = roQavion[0]
+                    if abs(1.0 - g1/d1) > 1e-10:
+                        y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/r1))
+                        z = max(z, y)
+
+                # Test U component at plane
+                a1 = abs(roUavion[3])
+                d1 = abs(roUavion[2])
+                g1 = abs(roUavion[1])
+                r1 = abs(roUavion[0])
+                if a1 >= acu and d1 >= acu and r1 >= acu:
+                    a1 = roUavion[3]
+                    d1 = roUavion[2]
+                    g1 = roUavion[1]
+                    r1 = roUavion[0]
+                    if abs(1.0 - g1/d1) > 1e-10:
+                        y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/r1))
+                        z = max(z, y)
+
+                # Test all angles
+                for l in range(2*mu + 1):
+                    if l == mu:
+                        continue
+                    # Test I
+                    a1 = inm2[l]
+                    d1 = inm1[l]
+                    g1 = in_current[l]
+                    if abs(a1) > acu and abs(d1) > acu and abs(i3[l]) > acu:
+                        if abs(1.0 - g1/d1) > 1e-10:
+                            y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/i3[l]))
+                            z = max(z, y)
+                    # Test Q
+                    a1 = qnm2[l]
+                    d1 = qnm1[l]
+                    g1 = qn_current[l]
+                    if abs(a1) > acu and abs(d1) > acu and abs(q3[l]) > acu:
+                        if abs(1.0 - g1/d1) > 1e-10:
+                            y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/q3[l]))
+                            z = max(z, y)
+                    # Test U
+                    a1 = unm2[l]
+                    d1 = unm1[l]
+                    g1 = un_current[l]
+                    if abs(a1) > acu and abs(d1) > acu and abs(u3[l]) > acu:
+                        if abs(1.0 - g1/d1) > 1e-10:
+                            y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/u3[l]))
+                            z = max(z, y)
+
+                if z < 0.01:
+                    # Successful convergence - apply geometric series
+                    for l in range(2*mu + 1):
+                        y1 = 1.0
+                        d1 = inm1[l]
+                        if abs(d1) > acu:
+                            g1 = in_current[l]
+                            if abs(g1 - d1) > acu:
+                                y1 = 1.0 - g1/d1
+                                g1 = g1 / y1
+                                i3[l] += g1
+                        y1 = 1.0
+                        d1 = qnm1[l]
+                        if abs(d1) > acu:
+                            g1 = qn_current[l]
+                            if abs(g1 - d1) > acu:
+                                y1 = 1.0 - g1/d1
+                                g1 = g1 / y1
+                                q3[l] += g1
+                        y1 = 1.0
+                        d1 = unm1[l]
+                        if abs(d1) > acu:
+                            g1 = un_current[l]
+                            if abs(g1 - d1) > acu:
+                                y1 = 1.0 - g1/d1
+                                g1 = g1 / y1
+                                u3[l] += g1
+
+                    y1 = 1.0
+                    d1 = roIavion[2]
+                    if abs(d1) >= acu:
+                        g1 = roIavion[1]
+                        if abs(g1 - d1) >= acu:
+                            y1 = 1.0 - g1/d1
+                            g1 = g1 / y1
+                        roIavion[0] += g1
+
+                    y1 = 1.0
+                    d1 = roQavion[2]
+                    if abs(d1) >= acu:
+                        g1 = roQavion[1]
+                        if abs(g1 - d1) >= acu:
+                            y1 = 1.0 - g1/d1
+                            g1 = g1 / y1
+                        roQavion[0] += g1
+
+                    y1 = 1.0
+                    d1 = roUavion[2]
+                    if abs(d1) >= acu:
+                        g1 = roUavion[1]
+                        if abs(g1 - d1) >= acu:
+                            y1 = 1.0 - g1/d1
+                            g1 = g1 / y1
+                        roUavion[0] += g1
+
+                    break
+
+                # Store n-2 order
+                for k in range(2*mu + 1):
+                    inm2[k] = inm1[k]
+                    qnm2[k] = qnm1[k]
+                    unm2[k] = unm1[k]
+                roIavion[3] = roIavion[2]
+                roQavion[3] = roQavion[2]
+                roUavion[3] = roUavion[2]
+
+            # Store n-1 order
+            for k in range(2*mu + 1):
+                inm1[k] = in_current[k]
+                qnm1[k] = qn_current[k]
+                unm1[k] = un_current[k]
+            roIavion[2] = roIavion[1]
+            roQavion[2] = roQavion[1]
+            roUavion[2] = roUavion[1]
+
+            # Add to total
+            for l in range(2*mu + 1):
+                i3[l] += in_current[l]
+                q3[l] += qn_current[l]
+                u3[l] += un_current[l]
+            roIavion[0] += roIavion[1]
+            roQavion[0] += roQavion[1]
+            roUavion[0] += roUavion[1]
+
+            # Check if order is small enough
+            z = 0.0
+            for l in range(2*mu + 1):
+                if abs(i3[l]) >= acu:
+                    y = abs(in_current[l] / i3[l])
+                    z = max(z, y)
+                if abs(q3[l]) >= acu:
+                    y = abs(qn_current[l] / q3[l])
+                    z = max(z, y)
+                if abs(u3[l]) >= acu:
+                    y = abs(un_current[l] / u3[l])
+                    z = max(z, y)
+
+            if z < 1.0e-8:
+                break
+
+        # Sum Fourier components
+        delta0s = 1.0 if is_val == 0 else 2.0
+        for l in range(2*mu + 1):
+            i4[l] += abs(delta0s * i3[l])
+            q4[l] += abs(q3[l])
+            u4[l] += abs(u3[l])
+
+        # Accumulate angle-dependent radiances
+        for l in range(naz):
+            phi_curr = rp[l]
+            for m in range(mum1 + 1):
+                if m >= mu:
+                    xli[m, l] += delta0s * i3[m] * np_module.cos(is_val * (phi_curr + pi))
+                    xlq[m, l] += delta0s * q3[m] * np_module.cos(is_val * (phi_curr + pi))
+                    xlu[m, l] += delta0s * u3[m] * np_module.sin(is_val * (phi_curr + pi))
+                else:
+                    xli[m, l] += delta0s * i3[m] * np_module.cos(is_val * phi_curr)
+                    xlq[m, l] += delta0s * q3[m] * np_module.cos(is_val * phi_curr)
+                    xlu[m, l] += delta0s * u3[m] * np_module.sin(is_val * phi_curr)
+
+        # Look-up table generation
+        for m in range(mu):
+            for l in range(nfilut[m]):
+                phimul = filut[m, l] * pi / 180.0
+                rolut[m, l] += delta0s * i3[mu + 1 + m] * np_module.cos(is_val * (phimul + pi))
+                rolutq[m, l] += delta0s * q3[mu + 1 + m] * np_module.cos(is_val * (phimul + pi))
+                rolutu[m, l] += delta0s * u3[mu + 1 + m] * np_module.sin(is_val * (phimul + pi))
+
+        # Special values
+        if is_val == 0:
+            for k in range(mu + 1, 2*mu):
+                xli[mu, 0] += rm[k] * gb[k] * i3[2*mu - k]
+                xlq[mu, 0] += rm[k] * gb[k] * q3[2*mu - k]
+                xlu[mu, 0] += rm[k] * gb[k] * u3[2*mu - k]
+
+        xli[2*mu, 0] += delta0s * i3[2*mu] * np_module.cos(is_val * (phirad + pi))
+        xlq[2*mu, 0] += delta0s * q3[2*mu] * np_module.cos(is_val * (phirad + pi))
+        xlu[2*mu, 0] += delta0s * u3[2*mu] * np_module.sin(is_val * (phirad + pi))
+
+        xli[0, 0] += delta0s * roIavion[0] * np_module.cos(is_val * (phirad + pi))
+        xlq[0, 0] += delta0s * roQavion[0] * np_module.cos(is_val * (phirad + pi))
+        xlu[0, 0] += delta0s * roUavion[0] * np_module.sin(is_val * (phirad + pi))
+
+        for ifi in range(nfi):
+            phimul = ifi * pi / (nfi - 1)
+            xlphim[ifi] += delta0s * roIavion[0] * np_module.cos(is_val * (phimul + pi))
+
+        # Check Fourier convergence
+        z = 0.0
+        for l in range(2*mu + 1):
+            if abs(i4[l]) >= acu:
+                x = abs(delta0s * i3[l] / i4[l])
+                z = max(z, x)
+            if abs(q4[l]) >= acu:
+                x = abs(q3[l] / q4[l])
+                z = max(z, x)
+            if abs(u4[l]) >= acu:
+                x = abs(u3[l] / u4[l])
+                z = max(z, x)
+
+        if z <= 0.0005:
+            break
+
+    # Restore nt
+    nt = snt
+
+    return xli, xlq, xlu, xlphim, rolut, rolutq, rolutu, filut, nfilut
+
+
 __all__ = [
     'discre',
     'kernel',
+    'kernelpol',
     'aero_prof',
     'iso',
     'os',
+    'ospol',
     'set_aerosol_phase_function',
     'set_aerosol_profile',
     'AtmosphereState',
