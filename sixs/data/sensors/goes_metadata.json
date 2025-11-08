@@ -1,0 +1,17 @@
+{
+  "sensor": "goes",
+  "num_bands": 2,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.49,
+      "wavelength_upper": 0.8999999
+    },
+    "band_2": {
+      "wavelength_lower": 0.49,
+      "wavelength_upper": 0.8999999
+    }
+  }
+}

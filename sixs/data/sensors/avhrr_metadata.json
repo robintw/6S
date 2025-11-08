@@ -1,0 +1,69 @@
+{
+  "sensor": "avhrr",
+  "num_bands": 16,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_2": {
+      "wavelength_lower": 0.69,
+      "wavelength_upper": 1.12
+    },
+    "band_3": {
+      "wavelength_lower": 0.5,
+      "wavelength_upper": 0.8
+    },
+    "band_4": {
+      "wavelength_lower": 0.64,
+      "wavelength_upper": 1.17
+    },
+    "band_5": {
+      "wavelength_lower": 0.54,
+      "wavelength_upper": 1.01
+    },
+    "band_6": {
+      "wavelength_lower": 0.68,
+      "wavelength_upper": 1.12
+    },
+    "band_7": {
+      "wavelength_lower": 0.53,
+      "wavelength_upper": 0.81
+    },
+    "band_8": {
+      "wavelength_lower": 0.68,
+      "wavelength_upper": 1.17
+    },
+    "band_9": {
+      "wavelength_lower": 0.53,
+      "wavelength_upper": 0.78
+    },
+    "band_10": {
+      "wavelength_lower": 0.6,
+      "wavelength_upper": 1.19
+    },
+    "band_11": {
+      "wavelength_lower": 0.54,
+      "wavelength_upper": 0.82
+    },
+    "band_12": {
+      "wavelength_lower": 0.6,
+      "wavelength_upper": 1.12
+    },
+    "band_13": {
+      "wavelength_lower": 0.5,
+      "wavelength_upper": 1.0
+    },
+    "band_14": {
+      "wavelength_lower": 0.65,
+      "wavelength_upper": 1.12
+    },
+    "band_15": {
+      "wavelength_lower": 0.5,
+      "wavelength_upper": 1.11
+    },
+    "band_16": {
+      "wavelength_lower": 0.68,
+      "wavelength_upper": 1.1
+    }
+  }
+}

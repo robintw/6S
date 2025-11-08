@@ -1,0 +1,41 @@
+{
+  "sensor": "modis",
+  "num_bands": 8,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.61,
+      "wavelength_upper": 0.685
+    },
+    "band_2": {
+      "wavelength_lower": 0.82,
+      "wavelength_upper": 0.9025
+    },
+    "band_3": {
+      "wavelength_lower": 0.45,
+      "wavelength_upper": 0.4825
+    },
+    "band_4": {
+      "wavelength_lower": 0.54,
+      "wavelength_upper": 0.57
+    },
+    "band_5": {
+      "wavelength_lower": 1.215,
+      "wavelength_upper": 1.27
+    },
+    "band_6": {
+      "wavelength_lower": 1.6,
+      "wavelength_upper": 1.665
+    },
+    "band_7": {
+      "wavelength_lower": 2.0575,
+      "wavelength_upper": 2.1825
+    },
+    "band_8": {
+      "wavelength_lower": 0.4025,
+      "wavelength_upper": 0.4225
+    }
+  }
+}

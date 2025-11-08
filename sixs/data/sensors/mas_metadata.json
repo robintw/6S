@@ -1,0 +1,49 @@
+{
+  "sensor": "mas",
+  "num_bands": 10,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.5025,
+      "wavelength_upper": 0.5875
+    },
+    "band_2": {
+      "wavelength_lower": 0.6075,
+      "wavelength_upper": 0.7
+    },
+    "band_3": {
+      "wavelength_lower": 0.83,
+      "wavelength_upper": 0.9125
+    },
+    "band_4": {
+      "wavelength_lower": 0.9,
+      "wavelength_upper": 0.9975
+    },
+    "band_5": {
+      "wavelength_lower": 1.82,
+      "wavelength_upper": 1.9575
+    },
+    "band_6": {
+      "wavelength_lower": 2.095,
+      "wavelength_upper": 2.1925
+    },
+    "band_7": {
+      "wavelength_lower": 3.58,
+      "wavelength_upper": 3.87
+    },
+    "band_8": {
+      "wavelength_lower": 0.455,
+      "wavelength_upper": 0.485
+    },
+    "band_9": {
+      "wavelength_lower": 1.21,
+      "wavelength_upper": 1.27
+    },
+    "band_10": {
+      "wavelength_lower": 1.6075,
+      "wavelength_upper": 1.6725
+    }
+  }
+}

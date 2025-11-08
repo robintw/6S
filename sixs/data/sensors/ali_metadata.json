@@ -1,0 +1,45 @@
+{
+  "sensor": "ali",
+  "num_bands": 9,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.4225,
+      "wavelength_upper": 0.4625
+    },
+    "band_2": {
+      "wavelength_lower": 0.4325,
+      "wavelength_upper": 0.55
+    },
+    "band_3": {
+      "wavelength_lower": 0.5,
+      "wavelength_upper": 0.63
+    },
+    "band_4": {
+      "wavelength_lower": 0.5775,
+      "wavelength_upper": 0.73
+    },
+    "band_5": {
+      "wavelength_lower": 0.7525,
+      "wavelength_upper": 0.8375
+    },
+    "band_6": {
+      "wavelength_lower": 0.8025,
+      "wavelength_upper": 0.935
+    },
+    "band_7": {
+      "wavelength_lower": 1.13,
+      "wavelength_upper": 1.345
+    },
+    "band_8": {
+      "wavelength_lower": 1.47,
+      "wavelength_upper": 1.82
+    },
+    "band_9": {
+      "wavelength_lower": 1.98,
+      "wavelength_upper": 2.53
+    }
+  }
+}

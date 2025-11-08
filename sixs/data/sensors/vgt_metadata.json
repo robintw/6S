@@ -1,0 +1,25 @@
+{
+  "sensor": "vgt",
+  "num_bands": 4,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.4175,
+      "wavelength_upper": 0.5
+    },
+    "band_2": {
+      "wavelength_lower": 0.5975,
+      "wavelength_upper": 0.7675
+    },
+    "band_3": {
+      "wavelength_lower": 0.7325,
+      "wavelength_upper": 0.9575
+    },
+    "band_4": {
+      "wavelength_lower": 1.5225,
+      "wavelength_upper": 1.8
+    }
+  }
+}

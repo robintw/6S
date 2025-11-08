@@ -1,0 +1,25 @@
+{
+  "sensor": "aatsr",
+  "num_bands": 8,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.525,
+      "wavelength_upper": 0.5925
+    },
+    "band_2": {
+      "wavelength_lower": 0.6275,
+      "wavelength_upper": 0.6975
+    },
+    "band_3": {
+      "wavelength_lower": 0.8325,
+      "wavelength_upper": 0.9025
+    },
+    "band_4": {
+      "wavelength_lower": 1.4475,
+      "wavelength_upper": 1.7775
+    }
+  }
+}

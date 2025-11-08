@@ -1,0 +1,41 @@
+{
+  "sensor": "seawifs",
+  "num_bands": 8,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.3825,
+      "wavelength_upper": 0.7
+    },
+    "band_2": {
+      "wavelength_lower": 0.38,
+      "wavelength_upper": 0.58
+    },
+    "band_3": {
+      "wavelength_lower": 0.38,
+      "wavelength_upper": 1.02
+    },
+    "band_4": {
+      "wavelength_lower": 0.38,
+      "wavelength_upper": 1.02
+    },
+    "band_5": {
+      "wavelength_lower": 0.3825,
+      "wavelength_upper": 1.15
+    },
+    "band_6": {
+      "wavelength_lower": 0.3825,
+      "wavelength_upper": 1.05
+    },
+    "band_7": {
+      "wavelength_lower": 0.38,
+      "wavelength_upper": 1.15
+    },
+    "band_8": {
+      "wavelength_lower": 0.38,
+      "wavelength_upper": 1.15
+    }
+  }
+}
