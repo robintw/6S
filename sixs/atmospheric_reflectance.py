@@ -16,7 +16,7 @@ from sixs.successive_orders import os, ospol
 
 def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
            tamoyp, taerp, trmoyp, palt, phi, xmus, xmuv, phirad,
-           nt, mu, np, rm, gb, rp, ipol, xlm1, xlm2, nfi):
+           nt, mu, np_angles, rm, gb, rp, ipol, xlm1, xlm2, nfi):
     """
     Compute atmospheric reflectances for Rayleigh, aerosol, and mixed.
 
@@ -63,20 +63,20 @@ def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
         Number of atmospheric layers
     mu : int
         Number of Gauss quadrature angles
-    np : int
+    np_angles : int
         Number of azimuth angles
     rm : ndarray
         Gauss angle cosines, shape (2*mu+1,)
     gb : ndarray
         Gauss weights, shape (2*mu+1,)
     rp : ndarray
-        Azimuth angles (radians), shape (np,)
+        Azimuth angles (radians), shape (np_angles,)
     ipol : int
         Polarization flag (0=no polarization, 1=polarization only, 2=both)
     xlm1 : ndarray
-        Fourier components output, shape (2*mu+1, np)
+        Fourier components output, shape (2*mu+1, np_angles)
     xlm2 : ndarray
-        Secondary Fourier components, shape (2*mu+1, np)
+        Secondary Fourier components, shape (2*mu+1, np_angles)
     nfi : int
         Number of azimuth angles for output (typically 13)
 
@@ -168,7 +168,7 @@ def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
 
     xlm1_ray, xqm1_ray, xum1_ray, xlphim_ray, _, _, _, _, nfilut_ray = ospol(
         iaer_prof, tamol, trmoy, piza, tamolp, trmoyp, palt,
-        phirad, nt, mu, np, rm_view, gb, rp
+        phirad, nt, mu, np_angles, rm_view, gb, rp
     )
 
     if ipol != 1:  # Not polarization-only mode
@@ -206,14 +206,14 @@ def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
     if ipol != 1:  # Non-polarized mode
         xlm1_aer, xlphim_aer, _, _, _, _, _ = os(
             iaer_prof, tamoy, tamol, pizmoy, tamoyp, tamolp, palt,
-            phirad, nt, mu, np, rm_view, gb, rp
+            phirad, nt, mu, np_angles, rm_view, gb, rp
         )
         roaero = xlm1_aer[-mu, 0] / xmus
 
     if ipol != 0:  # Polarization mode
         xlm1_aer, xqm1_aer, xum1_aer, xlphim_aer, _, _, _, _, _ = ospol(
             iaer_prof, taer, tamol, piza, taerp, tamolp, palt,
-            phirad, nt, mu, np, rm_view, gb, rp
+            phirad, nt, mu, np_angles, rm_view, gb, rp
         )
         rqaero = xqm1_aer[-mu, 0] / xmus
         ruaero = xum1_aer[-mu, 0] / xmus
@@ -224,7 +224,7 @@ def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
     if ipol != 1:  # Non-polarized mode
         xlm1_mix, xlphim_mix, _, _, _, _, _ = os(
             iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
-            phirad, nt, mu, np, rm_view, gb, rp
+            phirad, nt, mu, np_angles, rm_view, gb, rp
         )
         romix = xlm1_mix[-mu, 0] / xmus
         for ifi in range(nfi):
@@ -233,7 +233,7 @@ def atmref(iaer, iaer_prof, tamoy, taer, trmoy, pizmoy, piza,
     if ipol != 0:  # Polarization mode
         xlm1_mix, xqm1_mix, xum1_mix, xlphim_mix, rolut_tmp, rolutq_tmp, rolutu_tmp, filut_tmp, nfilut_tmp = ospol(
             iaer_prof, taer, trmoy, piza, taerp, trmoyp, palt,
-            phirad, nt, mu, np, rm_view, gb, rp
+            phirad, nt, mu, np_angles, rm_view, gb, rp
         )
         rqmix = xqm1_mix[-mu, 0] / xmus
         rumix = xum1_mix[-mu, 0] / xmus

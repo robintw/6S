@@ -730,9 +730,7 @@ class SixSRunner:
                 whpl = self.atm_whpl
                 wopl = self.atm_wopl
 
-            (dtwava, dtozon, dtdica, dtoxyg, dtniox, dtmeth, dtmoca,
-             utwava, utozon, utdica, utoxyg, utniox, utmeth, utmoca,
-             ttwava, ttozon, ttdica, ttoxyg, ttniox, ttmeth, ttmoca) = abstra(
+            abs_result = abstra(
                 self.input.idatm, wl,
                 self.results.xmus, self.results.xmuv,
                 self.results.uw, self.results.uo3,
@@ -743,6 +741,34 @@ class SixSRunner:
                 self.atm_wh, self.atm_wo,
                 zpl, ppl, tpl, whpl, wopl
             )
+
+            # Extract transmittances from result dictionary
+            dtwava = abs_result['dtwava']
+            dtozon = abs_result['dtozon']
+            dtdica = abs_result['dtdica']
+            dtoxyg = abs_result['dtoxyg']
+            dtniox = abs_result['dtniox']
+            dtmeth = abs_result['dtmeth']
+            dtmoca = abs_result['dtmoca']
+            dtcont = abs_result['dtcont']
+
+            utwava = abs_result['utwava']
+            utozon = abs_result['utozon']
+            utdica = abs_result['utdica']
+            utoxyg = abs_result['utoxyg']
+            utniox = abs_result['utniox']
+            utmeth = abs_result['utmeth']
+            utmoca = abs_result['utmoca']
+            utcont = abs_result['utcont']
+
+            ttwava = abs_result['ttwava']
+            ttozon = abs_result['ttozon']
+            ttdica = abs_result['ttdica']
+            ttoxyg = abs_result['ttoxyg']
+            ttniox = abs_result['ttniox']
+            ttmeth = abs_result['ttmeth']
+            ttmoca = abs_result['ttmoca']
+            ttcont = abs_result['ttcont']
 
             # Apply accuracy threshold
             if dtwava < self.accu3:
@@ -760,13 +786,7 @@ class SixSRunner:
             coef = sbor * self.step * swl
 
             # Call INTERP to interpolate atmospheric properties (main.f line 2809)
-            (romix, rorayl, roaero, phaa, phar,
-             rqmix, rqrayl, rqaero, qhaa, qhar,
-             rumix, rurayl, ruaero, uhaa, uhar,
-             tsca, tray, trayp, taer, taerp,
-             dtott, utott, astot, asray, asaer,
-             utotr, utota, dtotr, dtota,
-             romix_fi, rolut, rolutq, rolutu) = interp(
+            interp_result = interp(
                 self.input.iaer, idatmp, wl,
                 self.results.taer55, self.results.taer55p,
                 self.results.xmud,
@@ -782,6 +802,47 @@ class SixSRunner:
                 self.rolutsq, self.rolutsu,
                 self.nfilut, self.nfi, self.mu
             )
+
+            # Extract values from result dictionary
+            romix = interp_result['romix']
+            rorayl = interp_result['rorayl']
+            roaero = interp_result['roaero']
+            phaa = interp_result['phaa']
+            phar = interp_result['phar']
+
+            rqmix = interp_result['rqmix']
+            rqrayl = interp_result['rqrayl']
+            rqaero = interp_result['rqaero']
+            qhaa = interp_result['qhaa']
+            qhar = interp_result['qhar']
+
+            rumix = interp_result['rumix']
+            rurayl = interp_result['rurayl']
+            ruaero = interp_result['ruaero']
+            uhaa = interp_result['uhaa']
+            uhar = interp_result['uhar']
+
+            tsca = interp_result['tsca']
+            tray = interp_result['tray']
+            trayp = interp_result['trayp']
+            taer = interp_result['taer']
+            taerp = interp_result['taerp']
+
+            dtott = interp_result['dtott']
+            utott = interp_result['utott']
+            astot = interp_result['astot']
+            asray = interp_result['asray']
+            asaer = interp_result['asaer']
+
+            utotr = interp_result['utotr']
+            utota = interp_result['utota']
+            dtotr = interp_result['dtotr']
+            dtota = interp_result['dtota']
+
+            romix_fi = interp_result['romix_fi']
+            rolut = interp_result['rolut']
+            rolutq = interp_result['rolutq']
+            rolutu = interp_result['rolutu']
 
             # Total gaseous transmittances (main.f lines 2816-2820)
             dgtot = dtwava * dtozon * dtdica * dtoxyg * dtniox * dtmeth * dtmoca

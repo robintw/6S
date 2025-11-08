@@ -13,13 +13,13 @@ Functions:
 """
 
 import numpy as np
-from sixs.optical_depth import odrayl
+from sixs.odrayl import odrayl
 from sixs.scattering import trunca, scatra
 from sixs.atmospheric_reflectance import atmref
 
 
 def discom(idatmp, iaer, iaer_prof, xmus, xmuv, phi, taer55, taer55p,
-           palt, phirad, nt, mu, np, rm, gb, rp, ftray, ipol, xlm1, xlm2,
+           palt, phirad, nt, mu, np_angles, rm, gb, rp, ftray, ipol, xlm1, xlm2,
            nfi, ext, ome, gasym, phase, qhase, uhase, wldis, wlinf, wlsup,
            alphal, betal, gammal, zetal, phasel, qhasel, uhasel, nquad,
            alt_z, taer_z, taer55_z, num_z):
@@ -60,22 +60,22 @@ def discom(idatmp, iaer, iaer_prof, xmus, xmuv, phi, taer55, taer55p,
         Number of atmospheric layers
     mu : int
         Number of viewing angles for quadrature
-    np : int
+    np_angles : int
         Number of azimuth angles
     rm : ndarray
         Gauss angle cosines, shape (2*mu+1,)
     gb : ndarray
         Gauss weights, shape (2*mu+1,)
     rp : ndarray
-        Azimuth angles (radians), shape (np,)
+        Azimuth angles (radians), shape (np_angles,)
     ftray : float
         Fraction of Rayleigh above plane
     ipol : int
         Polarization flag (0=no, 1=yes, 2=both)
     xlm1 : ndarray
-        Fourier components workspace, shape (2*mu+1, np)
+        Fourier components workspace, shape (2*mu+1, np_angles)
     xlm2 : ndarray
-        Secondary Fourier workspace, shape (2*mu+1, np)
+        Secondary Fourier workspace, shape (2*mu+1, np_angles)
     nfi : int
         Number of azimuth output angles
     ext : ndarray
@@ -245,7 +245,7 @@ def discom(idatmp, iaer, iaer_prof, xmus, xmuv, phi, taer55, taer55p,
          nfilut_l, filut_l, rolut_l, rolutq_l, rolutu_l) = atmref(
             iaer, iaer_prof, tamoy, taer, tray, pizmoy, piza,
             tamoyp, taerp, trayp, palt, phi, xmus, xmuv, phirad,
-            nt, mu, np, rm, gb, rp, ipol, xlm1, xlm2, nfi
+            nt, mu, np_angles, rm, gb, rp, ipol, xlm1, xlm2, nfi
         )
 
         # Store reflectances
@@ -276,12 +276,30 @@ def discom(idatmp, iaer, iaer_prof, xmus, xmuv, phi, taer55, taer55p,
                 rolutsu[l, i, j] = rolutu_l[i, j]
 
         # Compute scattering transmittances
-        (ddirtt, ddiftt, udirtt, udiftt, sphalbt,
-         ddirtr, ddiftr, udirtr, udiftr, sphalbr,
-         ddirta, ddifta, udirta, udifta, sphalba) = scatra(
+        result = scatra(
             iaer_prof, tamoy, tamoyp, tray, trayp, pizmoy,
             palt, nt, mu, rm, gb, xmus, xmuv
         )
+
+        # Extract transmittances from result dictionary
+        # result['rayleigh'], result['total'], result['aerosol']
+        ddirtr = result['rayleigh']['ddir']
+        ddiftr = result['rayleigh']['ddif']
+        udirtr = result['rayleigh']['udir']
+        udiftr = result['rayleigh']['udif']
+        sphalbr = result['rayleigh']['sphalb']
+
+        ddirtt = result['total']['ddir']
+        ddiftt = result['total']['ddif']
+        udirtt = result['total']['udir']
+        udiftt = result['total']['udif']
+        sphalbt = result['total']['sphalb']
+
+        ddirta = result['aerosol']['ddir']
+        ddifta = result['aerosol']['ddif']
+        udirta = result['aerosol']['udir']
+        udifta = result['aerosol']['udif']
+        sphalba = result['aerosol']['sphalb']
 
         # Store transmittances
         dtdir[0, l] = ddirtr
