@@ -500,16 +500,219 @@ def lakew():
     return _LAKEW_REFLECTANCE.copy()
 
 
+# ==============================================================================
+# Hapke BRDF Model
+# ==============================================================================
+
+def hapkbrdf(om, af, s0, h, mu, rm, rp):
+    """
+    Hapke bidirectional reflectance distribution function.
+
+    Physical BRDF model based on Hapke's theory for particulate surfaces.
+    Includes hot spot effect and single scattering albedo.
+
+    Parameters
+    ----------
+    om : float
+        Single scattering albedo (0-1)
+    af : float
+        Asymmetry parameter for phase function (-1 to 1)
+        Negative: backscattering, Positive: forward scattering
+    s0 : float
+        Amplitude of hot spot effect
+    h : float
+        Width of hot spot (radians)
+    mu : int
+        Number of quadrature angles
+    rm : ndarray
+        Cosines of angles, shape (2*mu+1,) with indices from -mu to mu
+        rm[mu] = cos(solar zenith), rm[mu+j] = cos(view zenith j)
+    rp : ndarray
+        Relative azimuth angles (radians), shape (np,)
+
+    Returns
+    -------
+    brdfint : ndarray
+        BRDF values, shape (mu, np)
+        brdfint[j-1, k-1] = BRDF for viewing angle j, azimuth k
+
+    Notes
+    -----
+    Converted from Fortran HAPKBRDF.f
+
+    References: Journal of Geophysical Research, Vol 95, No D8, pp 11767
+
+    The Hapke model includes:
+    - Phase function with asymmetry parameter
+    - Multiple scattering through H-functions
+    - Opposition (hot spot) effect
+    """
+    np_azim = len(rp)
+    brdfint = np.zeros((mu, np_azim))
+
+    # Solar zenith angle cosine (rm[0] in Fortran indexing)
+    mu1 = rm[mu]
+
+    # Single scattering albedo effects
+    sqrt_om_comp = np.sqrt(1.0 - om)
+
+    # Phase function normalization at zero phase angle
+    p0 = (1.0 - af**2) / ((1.0 + af**2 + 2.0 * af)**1.5)
+
+    # H-function for solar direction
+    h1 = (1.0 + 2.0 * mu1) / (1.0 + 2.0 * sqrt_om_comp * mu1)
+
+    for k in range(np_azim):
+        for j in range(1, mu + 1):
+            # View zenith angle cosine
+            mu2 = rm[mu + j]
+
+            # Relative azimuth angle
+            if j == mu:
+                fi = rm[0]  # rm[-mu] in Fortran
+            else:
+                fi = rp[k] + rm[0]
+
+            # Scattering angle cosine
+            cg = (mu1 * mu2 +
+                  np.sqrt(1.0 - mu1**2) * np.sqrt(1.0 - mu2**2) * np.cos(fi))
+
+            # Basic reflectance factor
+            f = om / 4.0 / (mu2 + mu1)
+
+            # H-function for view direction
+            h2 = (1.0 + 2.0 * mu2) / (1.0 + 2.0 * sqrt_om_comp * mu2)
+            h1h2 = h1 * h2
+
+            # Phase function
+            pg = (1.0 - af**2) / ((1.0 + af**2 + 2.0 * af * cg)**1.5)
+
+            # Scattering angle
+            g = np.arccos(cg)
+
+            # Hot spot (opposition) effect
+            bg = (s0 / (om * p0)) / (1.0 + np.tan(g / 2.0) / h)
+
+            # Complete Hapke BRDF
+            brdfint[j - 1, k] = f * ((1.0 + bg) * pg + h1h2 - 1.0)
+
+    return brdfint
+
+
+def hapkalbe(om, af, s0, h):
+    """
+    Hapke hemispherical albedo (bihemispherical reflectance).
+
+    Calculate the spherical albedo by integrating the Hapke BRDF over
+    all viewing and illumination directions using Gaussian quadrature.
+
+    Parameters
+    ----------
+    om : float
+        Single scattering albedo (0-1)
+    af : float
+        Asymmetry parameter for phase function (-1 to 1)
+    s0 : float
+        Amplitude of hot spot effect
+    h : float
+        Width of hot spot (radians)
+
+    Returns
+    -------
+    brdfalb : float
+        Hemispherical albedo (spherical albedo)
+
+    Notes
+    -----
+    Converted from Fortran HAPKALBE.f
+
+    Uses Gaussian quadrature integration with:
+    - 24 points for zenith angles (0 to π/2)
+    - 48 points for azimuth angles (0 to 2π)
+    """
+    nta = 24  # Number of zenith angle quadrature points
+    nfa = 48  # Number of azimuth angle quadrature points
+
+    pi = np.pi
+
+    # Gaussian quadrature for zenith angles (0 to π/2)
+    teta1 = 0.0
+    teta2 = pi / 2.0
+    ta, wta = gauss(teta1, teta2, nta)
+
+    # Gaussian quadrature for azimuth angles (0 to 2π)
+    phi1 = 0.0
+    phi2 = 2.0 * pi
+    fa, wfa = gauss(phi1, phi2, nfa)
+
+    brdfalb = 0.0
+    summ = 0.0
+
+    # Single scattering albedo effects
+    sqrt_om_comp = np.sqrt(1.0 - om)
+
+    # Phase function normalization
+    p0 = (1.0 - af**2) / ((1.0 + af**2 + 2.0 * af)**1.5)
+
+    # Triple integration over azimuth and two zenith angles
+    for k in range(nfa):
+        fi = fa[k]
+        for j in range(nta):
+            mu2 = np.cos(ta[j])
+            si2 = np.sin(ta[j])
+
+            # H-function for view direction
+            h2 = (1.0 + 2.0 * mu2) / (1.0 + 2.0 * sqrt_om_comp * mu2)
+
+            for l in range(nta):
+                mu1 = np.cos(ta[l])
+                si1 = np.sin(ta[l])
+
+                # Basic reflectance factor
+                f = om / 4.0 / (mu2 + mu1)
+
+                # Scattering angle cosine
+                cg = (mu1 * mu2 +
+                      np.sqrt(1.0 - mu1**2) * np.sqrt(1.0 - mu2**2) * np.cos(fi))
+
+                # H-function for solar direction
+                h1 = (1.0 + 2.0 * mu1) / (1.0 + 2.0 * sqrt_om_comp * mu1)
+                h1h2 = h1 * h2
+
+                # Phase function
+                pg = (1.0 - af**2) / ((1.0 + af**2 + 2.0 * af * cg)**1.5)
+
+                # Scattering angle
+                g = np.arccos(cg)
+
+                # Hot spot effect
+                bg = (s0 / (om * p0)) / (1.0 + np.tan(g / 2.0) / h)
+
+                # Integration weight
+                pond = mu1 * mu2 * si1 * si2 * wfa[k] * wta[j] * wta[l]
+
+                # Accumulate weighted BRDF
+                brdfalb += f * ((1.0 + bg) * pg + h1h2 - 1.0) * pond
+                summ += pond
+
+    # Normalize by total weight
+    brdfalb = brdfalb / summ
+
+    return brdfalb
+
+
 __all__ = [
     # Albedo models
     'minnalbe',
     'modisalbe',
     'waltalbe',
     'roujalbe',
+    'hapkalbe',
     # BRDF models
     'minnbrdf',
     'waltbrdf',
     'roujbrdf',
+    'hapkbrdf',
     # Water reflectance
     'clearw',
     'lakew',

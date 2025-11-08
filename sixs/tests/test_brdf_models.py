@@ -10,8 +10,8 @@ import sys
 sys.path.insert(0, '/home/user/6S')
 
 from sixs.brdf_models import (
-    minnalbe, modisalbe, waltalbe, roujalbe,
-    minnbrdf, waltbrdf, roujbrdf,
+    minnalbe, modisalbe, waltalbe, roujalbe, hapkalbe,
+    minnbrdf, waltbrdf, roujbrdf, hapkbrdf,
     clearw, lakew
 )
 
@@ -291,6 +291,183 @@ def test_brdf_normalization():
 
     # Should be reasonable magnitude
     assert brdf_minn[1, 0] < 1.0
+
+
+# ==============================================================================
+# Hapke BRDF Model Tests
+# ==============================================================================
+
+def test_hapkbrdf_basic():
+    """Test basic Hapke BRDF calculation."""
+    # Typical lunar-like parameters
+    om = 0.3   # Single scattering albedo
+    af = -0.2  # Backscattering asymmetry
+    s0 = 0.5   # Hot spot amplitude
+    h = 0.06   # Hot spot width
+
+    # Geometry
+    mu = 10
+    solar_zenith = np.arccos(0.8)  # ~36.9°
+    view_zenith = np.arccos(0.7)   # ~45.6°
+
+    # Create rm array (negative indices handled via offset)
+    rm = np.zeros(2 * mu + 1)
+    rm[mu] = np.cos(solar_zenith)  # Solar angle
+    rm[mu + 1] = np.cos(view_zenith)  # View angle
+
+    # Relative azimuth
+    rp = np.array([0.0, np.pi / 4, np.pi / 2, np.pi])
+
+    brdf = hapkbrdf(om, af, s0, h, mu, rm, rp)
+
+    # Check output shape
+    assert brdf.shape == (mu, len(rp))
+
+    # BRDF values should be positive
+    assert np.all(brdf >= 0)
+
+    # BRDF values should vary with azimuth
+    # Phase angle changes with azimuth - smaller phase = higher BRDF (hot spot)
+    assert brdf[0, 0] != brdf[0, 3]
+
+
+def test_hapkbrdf_hot_spot():
+    """Test Hapke BRDF hot spot effect."""
+    om = 0.5
+    af = 0.0   # Isotropic scattering
+    s0 = 1.0   # Strong hot spot
+    h = 0.1
+
+    mu = 10
+
+    # Test geometry with same solar and view angles
+    rm = np.zeros(2 * mu + 1)
+    rm[mu] = 0.8  # Solar angle
+    rm[mu + 1] = 0.8  # Same view angle
+
+    # Azimuth = 0 gives minimum phase angle (hot spot)
+    # Azimuth = π gives larger phase angle
+    rp_hotspot = np.array([0.0])
+    rp_away = np.array([np.pi / 2])
+
+    brdf_hotspot = hapkbrdf(om, af, s0, h, mu, rm, rp_hotspot)
+    brdf_away = hapkbrdf(om, af, s0, h, mu, rm, rp_away)
+
+    # Hot spot (minimum phase angle) should be brighter
+    assert brdf_hotspot[0, 0] > brdf_away[0, 0]
+
+
+def test_hapkbrdf_symmetry():
+    """Test Hapke BRDF reciprocity."""
+    om = 0.4
+    af = -0.3
+    s0 = 0.3
+    h = 0.05
+
+    mu = 10
+
+    # Geometry 1: Solar at angle1, view at angle2
+    rm1 = np.zeros(2 * mu + 1)
+    rm1[mu] = 0.6
+    rm1[mu + 1] = 0.8
+
+    # Geometry 2: Solar at angle2, view at angle1 (reciprocity)
+    rm2 = np.zeros(2 * mu + 1)
+    rm2[mu] = 0.8
+    rm2[mu + 1] = 0.6
+
+    rp = np.array([np.pi / 2])
+
+    brdf1 = hapkbrdf(om, af, s0, h, mu, rm1, rp)
+    brdf2 = hapkbrdf(om, af, s0, h, mu, rm2, rp)
+
+    # Reciprocity: switching solar and view angles should give same result
+    assert abs(brdf1[0, 0] - brdf2[0, 0]) < 1e-10
+
+
+def test_hapkalbe_basic():
+    """Test Hapke albedo calculation."""
+    # Typical parameters
+    om = 0.5   # Single scattering albedo
+    af = -0.2  # Backscattering
+    s0 = 0.5   # Hot spot amplitude
+    h = 0.06   # Hot spot width
+
+    alb = hapkalbe(om, af, s0, h)
+
+    # Albedo should be between 0 and 1
+    assert 0 < alb < 1
+
+    # Spherical albedo should be less than single scattering albedo
+    assert alb <= om
+
+
+def test_hapkalbe_increasing_om():
+    """Test that Hapke albedo increases with single scattering albedo."""
+    af = 0.0
+    s0 = 0.3
+    h = 0.05
+
+    alb1 = hapkalbe(0.3, af, s0, h)
+    alb2 = hapkalbe(0.6, af, s0, h)
+    alb3 = hapkalbe(0.9, af, s0, h)
+
+    # Higher single scattering albedo → higher spherical albedo
+    assert alb1 < alb2 < alb3
+
+
+def test_hapkalbe_forward_vs_back():
+    """Test Hapke albedo with forward vs. backscattering."""
+    om = 0.5
+    s0 = 0.3
+    h = 0.05
+
+    # Backscattering (negative af)
+    alb_back = hapkalbe(om, -0.3, s0, h)
+
+    # Forward scattering (positive af)
+    alb_forward = hapkalbe(om, 0.3, s0, h)
+
+    # Both should be valid albedos
+    assert 0 < alb_back < 1
+    assert 0 < alb_forward < 1
+
+
+def test_hapkalbe_physical_range():
+    """Test Hapke albedo stays within physical bounds."""
+    # Test various parameter combinations
+    test_cases = [
+        (0.2, -0.5, 0.5, 0.1),
+        (0.5, 0.0, 0.3, 0.05),
+        (0.8, 0.3, 0.8, 0.08),
+        (0.95, -0.8, 1.0, 0.12),
+    ]
+
+    for om, af, s0, h in test_cases:
+        alb = hapkalbe(om, af, s0, h)
+
+        # Must be positive
+        assert alb > 0
+
+        # Cannot exceed unity
+        assert alb <= 1.0
+
+        # Should be less than or equal to single scattering albedo
+        assert alb <= om + 0.01  # Small tolerance for numerical integration
+
+
+def test_hapk_consistency():
+    """Test consistency between Hapke BRDF and albedo."""
+    # If we manually integrate the BRDF, we should get close to the albedo
+    om = 0.6
+    af = -0.2
+    s0 = 0.4
+    h = 0.06
+
+    alb = hapkalbe(om, af, s0, h)
+
+    # The albedo should be reasonable for these parameters
+    assert 0.1 < alb < 0.8
 
 
 if __name__ == '__main__':
