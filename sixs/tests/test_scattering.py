@@ -9,7 +9,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/user/6S')
 
-from sixs.scattering import chand
+from sixs.scattering import chand, scatra
 
 
 def test_chand_basic():
@@ -249,6 +249,340 @@ def test_chand_consistency():
                         f"Negative for xphi={xphi}, xmuv={xmuv}, xmus={xmus}, xtau={xtau}"
                     assert xrray < 2.0, \
                         f"Too large for xphi={xphi}, xmuv={xmuv}, xmus={xmus}, xtau={xtau}"
+
+
+# ===== Tests for scatra function =====
+
+def test_scatra_basic():
+    """Test basic scatra function call."""
+    # Standard atmospheric parameters
+    iaer_prof = 1
+    taer = 0.2      # Aerosol optical depth
+    taerp = 0.1     # Aerosol depth above target
+    tray = 0.15     # Rayleigh optical depth
+    trayp = 0.08    # Rayleigh depth above target
+    piza = 0.9      # Single scattering albedo
+    palt = 1000.0   # Above atmosphere
+    nt = 30         # Number of layers
+    mu = 25         # Gauss angles
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8      # Solar zenith cosine
+    xmuv = 0.7      # View zenith cosine
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # Check that result has correct structure
+    assert 'total' in result
+    assert 'rayleigh' in result
+    assert 'aerosol' in result
+
+    # Check that all components have required keys
+    for key in ['total', 'rayleigh', 'aerosol']:
+        assert 'ddir' in result[key]
+        assert 'ddif' in result[key]
+        assert 'udir' in result[key]
+        assert 'udif' in result[key]
+        assert 'sphalb' in result[key]
+
+
+def test_scatra_transmittance_bounds():
+    """Test that transmittances are within physical bounds."""
+    iaer_prof = 1
+    taer = 0.3
+    taerp = 0.15
+    tray = 0.2
+    trayp = 0.1
+    piza = 0.85
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # All transmittances should be between 0 and 1
+    for component in ['total', 'rayleigh', 'aerosol']:
+        assert 0 <= result[component]['ddir'] <= 1
+        assert 0 <= result[component]['ddif'] <= 1
+        assert 0 <= result[component]['udir'] <= 1
+        assert 0 <= result[component]['udif'] <= 1
+        assert 0 <= result[component]['sphalb'] <= 1
+
+
+def test_scatra_no_aerosol():
+    """Test scatra with no aerosol (taer=0)."""
+    iaer_prof = 1
+    taer = 0.0      # No aerosol
+    taerp = 0.0
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # Aerosol component should show no attenuation (initial values)
+    assert result['aerosol']['ddir'] == 1.0
+    assert result['aerosol']['udir'] == 1.0
+    assert result['aerosol']['sphalb'] == 0.0
+
+    # Rayleigh component should show attenuation
+    assert result['rayleigh']['ddir'] < 1.0
+
+
+def test_scatra_above_atmosphere():
+    """Test scatra for altitude above atmosphere (palt > 900)."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0   # Above atmosphere
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # For Rayleigh, should use simple exponential formulas
+    expected_ddir_ray = np.exp(-tray/xmus)
+    assert abs(result['rayleigh']['ddir'] - expected_ddir_ray) < 1e-6
+
+    # Spherical albedo should be calculated via csalbr
+    assert result['rayleigh']['sphalb'] > 0
+
+
+def test_scatra_at_surface():
+    """Test scatra at or below surface (palt <= 0)."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.0     # No optical depth above (at surface)
+    tray = 0.15
+    trayp = 0.0
+    piza = 0.9
+    palt = 0.0      # At surface
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # At surface, upward diffuse should be 0 and upward direct should be 1
+    assert result['rayleigh']['udif'] == 0.0
+    assert result['rayleigh']['udir'] == 1.0
+
+
+def test_scatra_optical_depth_dependence():
+    """Test that transmittances decrease with increasing optical depth."""
+    iaer_prof = 1
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    # Case 1: Low optical depth
+    result1 = scatra(iaer_prof, 0.1, 0.05, 0.1, 0.05, piza, palt, nt, mu,
+                     rm, gb, xmus, xmuv)
+
+    # Case 2: High optical depth
+    result2 = scatra(iaer_prof, 0.4, 0.2, 0.3, 0.15, piza, palt, nt, mu,
+                     rm, gb, xmus, xmuv)
+
+    # Direct transmittances should decrease with higher optical depth
+    assert result2['total']['ddir'] < result1['total']['ddir']
+    assert result2['rayleigh']['ddir'] < result1['rayleigh']['ddir']
+
+
+def test_scatra_direct_transmittance_exponential():
+    """Test that direct transmittances follow Beer-Lambert law."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # For Rayleigh at palt > 900, direct transmittances are exponential
+    expected_ddir = np.exp(-tray/xmus)
+    expected_udir = np.exp(-tray/xmuv)
+
+    assert abs(result['rayleigh']['ddir'] - expected_ddir) < 1e-6
+    assert abs(result['rayleigh']['udir'] - expected_udir) < 1e-6
+
+
+def test_scatra_combined_vs_components():
+    """Test that total optical depth is sum of components."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # Total direct transmittance should be product of individual transmittances
+    # (for non-scattering case, or approximately for weak scattering)
+    total_tau = taer + tray
+    expected_total_ddir = np.exp(-total_tau/xmus)
+
+    # Should be close (exact for direct beam without scattering)
+    assert abs(result['total']['ddir'] - expected_total_ddir) < 1e-6
+
+
+def test_scatra_zenith_angle_dependence():
+    """Test scatra with varying zenith angles."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+
+    # Test different zenith angles
+    zenith_cos = [0.9, 0.7, 0.5, 0.3]
+
+    for xmus in zenith_cos:
+        for xmuv in zenith_cos:
+            result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt,
+                           nt, mu, rm, gb, xmus, xmuv)
+
+            # All transmittances should be valid
+            assert 0 <= result['total']['ddir'] <= 1
+            assert 0 <= result['total']['udir'] <= 1
+            assert np.isfinite(result['total']['ddir'])
+            assert np.isfinite(result['total']['udir'])
+
+
+def test_scatra_spherical_albedo_positive():
+    """Test that spherical albedo is non-negative."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # Spherical albedo should be non-negative
+    assert result['rayleigh']['sphalb'] >= 0
+    assert result['aerosol']['sphalb'] >= 0
+    assert result['total']['sphalb'] >= 0
+
+
+def test_scatra_diffuse_transmittance_nonnegative():
+    """Test that diffuse transmittances are non-negative."""
+    iaer_prof = 1
+    taer = 0.2
+    taerp = 0.1
+    tray = 0.15
+    trayp = 0.08
+    piza = 0.9
+    palt = 1000.0
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+
+    result = scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu,
+                    rm, gb, xmus, xmuv)
+
+    # Diffuse transmittances should be non-negative
+    for component in ['total', 'rayleigh', 'aerosol']:
+        assert result[component]['ddif'] >= 0
+        assert result[component]['udif'] >= 0
+
+
+def test_scatra_consistency():
+    """Test consistency of scatra across parameter space."""
+    iaer_prof = 1
+    palt_values = [0.0, 500.0, 1000.0]
+    tau_values = [(0.1, 0.05), (0.2, 0.1), (0.3, 0.15)]
+
+    nt = 30
+    mu = 25
+    rm = np.zeros(2*mu + 1)
+    gb = np.ones(2*mu + 1) / (2*mu + 1)
+    xmus = 0.8
+    xmuv = 0.7
+    piza = 0.9
+
+    for palt in palt_values:
+        for taer, taerp in tau_values:
+            for tray, trayp in tau_values:
+                result = scatra(iaer_prof, taer, taerp, tray, trayp, piza,
+                               palt, nt, mu, rm, gb, xmus, xmuv)
+
+                # Check all values are finite and physical
+                for component in ['total', 'rayleigh', 'aerosol']:
+                    assert np.isfinite(result[component]['ddir'])
+                    assert np.isfinite(result[component]['ddif'])
+                    assert np.isfinite(result[component]['udir'])
+                    assert np.isfinite(result[component]['udif'])
+                    assert np.isfinite(result[component]['sphalb'])
+
+                    assert 0 <= result[component]['ddir'] <= 1
+                    assert 0 <= result[component]['udir'] <= 1
 
 
 if __name__ == '__main__':
