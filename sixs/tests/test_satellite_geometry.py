@@ -9,7 +9,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/user/6S')
 
-from sixs.geometry import posspo, poslan
+from sixs.geometry import posspo, poslan, posge, posgw
 
 
 def test_posspo_basic():
@@ -143,6 +143,153 @@ def test_satellite_geometry_return_types():
     assert isinstance(phi0, (float, np.floating))
     assert isinstance(avis, (float, np.floating))
     assert isinstance(phiv, (float, np.floating))
+
+
+def test_posge_basic():
+    """Test GOES East satellite geometry calculation."""
+    # Center pixel coordinates
+    month = 6
+    jday = 15
+    tu = 12.0
+    nc = 6500  # Near center column
+    nl = 8665  # Near center line
+
+    asol, phi0, avis, phiv, xlon, xlat = posge(month, jday, tu, nc, nl)
+
+    # All values should be finite
+    assert np.isfinite(asol)
+    assert np.isfinite(phi0)
+    assert np.isfinite(avis)
+    assert np.isfinite(phiv)
+    assert np.isfinite(xlon)
+    assert np.isfinite(xlat)
+
+    # Solar zenith should be reasonable
+    assert 0 <= asol <= 90
+
+    # Viewing zenith should be small for near-center pixels
+    assert 0 <= avis < 90
+
+    # Latitude should be close to equator for center pixel
+    assert abs(xlat) < 10  # Should be near 0 for center
+
+    # Longitude should be close to GOES East position (75°W)
+    assert -100 < xlon < -50
+
+
+def test_posgw_basic():
+    """Test GOES West satellite geometry calculation."""
+    # Center pixel coordinates
+    month = 6
+    jday = 15
+    tu = 21.0  # 21:00 UTC = daytime at 135°W
+    nc = 6500  # Near center column
+    nl = 8665  # Near center line
+
+    asol, phi0, avis, phiv, xlon, xlat = posgw(month, jday, tu, nc, nl)
+
+    # All values should be finite
+    assert np.isfinite(asol)
+    assert np.isfinite(phi0)
+    assert np.isfinite(avis)
+    assert np.isfinite(phiv)
+    assert np.isfinite(xlon)
+    assert np.isfinite(xlat)
+
+    # Solar zenith should be reasonable
+    assert 0 <= asol <= 90
+
+    # Viewing zenith should be small for near-center pixels
+    assert 0 <= avis < 90
+
+    # Latitude should be close to equator for center pixel
+    assert abs(xlat) < 10
+
+    # Longitude should be close to GOES West position (135°W)
+    assert -160 < xlon < -110
+
+
+def test_goes_viewing_angles():
+    """Test that GOES satellites have non-zero viewing angles."""
+    # Off-center pixel (not nadir)
+    month = 6
+    jday = 15
+    nc = 8000  # Off-center column
+    nl = 10000  # Off-center line
+
+    # Use appropriate times for each satellite
+    asol_e, phi0_e, avis_e, phiv_e, xlon_e, xlat_e = posge(month, jday, 12.0, nc, nl)
+    asol_w, phi0_w, avis_w, phiv_w, xlon_w, xlat_w = posgw(month, jday, 21.0, nc, nl)
+
+    # Viewing angles should be non-zero for off-center pixels
+    assert avis_e > 0
+    assert avis_w > 0
+
+    # Viewing angles should be reasonable
+    assert 0 < avis_e < 90
+    assert 0 < avis_w < 90
+
+    # Viewing azimuth should be defined
+    assert 0 <= phiv_e <= 360
+    assert 0 <= phiv_w <= 360
+
+
+def test_goes_edge_pixels():
+    """Test GOES geometry at edge of visible disk."""
+    # Pixels closer to edge (but still valid)
+    month = 6
+    jday = 15
+    tu = 12.0
+
+    # Test a few off-center but valid pixels
+    test_pixels = [
+        (7000, 9000),
+        (6000, 9000),
+        (7000, 8000),
+    ]
+
+    for nc, nl in test_pixels:
+        # Should not raise error for these pixels
+        asol, phi0, avis, phiv, xlon, xlat = posge(month, jday, tu, nc, nl)
+
+        # All should be valid
+        assert np.isfinite(asol)
+        assert np.isfinite(avis)
+        assert -180 <= xlon <= 180
+        assert -90 <= xlat <= 90
+
+
+def test_goes_invalid_pixel():
+    """Test that invalid pixels raise appropriate error."""
+    month = 6
+    jday = 15
+    tu = 12.0
+
+    # Pixel way outside visible disk
+    nc = 20000
+    nl = 20000
+
+    with pytest.raises(ValueError, match="outside Earth disk"):
+        posge(month, jday, tu, nc, nl)
+
+
+def test_goes_east_west_different_longitudes():
+    """Test that GOES East and West give different longitudes."""
+    month = 6
+    jday = 15
+    nc = 6500
+    nl = 8665
+
+    # Use appropriate times for each satellite
+    _, _, _, _, xlon_e, xlat_e = posge(month, jday, 12.0, nc, nl)
+    _, _, _, _, xlon_w, xlat_w = posgw(month, jday, 21.0, nc, nl)
+
+    # Latitudes should be similar (same pixel position)
+    assert abs(xlat_e - xlat_w) < 1.0
+
+    # Longitudes should be different (60° apart for sat positions)
+    # GOES East at 75°W, GOES West at 135°W
+    assert abs(xlon_e - xlon_w) > 50  # Should differ significantly
 
 
 if __name__ == '__main__':
