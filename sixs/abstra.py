@@ -515,34 +515,130 @@ def _get_absorption_coefficients(idgaz, id, inu, v, iv):
         Absorption coefficients [a0, a1, a2, a3, a4, a5, a6, a7]
         Returns None if no absorption in this band
     """
-    # Import the appropriate WAVA module
-    # These will be implemented separately as part of Wave 3.4
+    from sixs.gas_absorption import (
+        wava1, wava2, wava3, wava4, wava5, wava6,
+        dica1, dica2, dica3,
+        oxyg3, oxyg4, oxyg5, oxyg6,
+        ozon1,
+        niox1, niox2, niox3, niox4, niox5, niox6,
+        meth1, meth2, meth3, meth4, meth5, meth6,
+        moca1, moca2, moca3, moca4, moca5, moca6,
+    )
 
-    # Placeholder: Return zeros for now until WAVA modules are converted
-    # Each spectral region (id) has different gas coverage:
-    # id=1 (2500-5060): H2O, CO2, O3, N2O, CH4, CO
-    # id=2 (5060-7620): H2O, CO2, N2O, CH4, CO
-    # id=3 (7620-10180): H2O, CO2, O2, N2O, CH4, CO
-    # id=4 (10180-12740): H2O, O2, N2O, CH4, CO
-    # id=5 (12740-15300): H2O, O2, N2O, CH4, CO
-    # id=6 (15300+): H2O, O2, N2O, CH4, CO
+    # Initialize output array
+    a = np.zeros(8)
 
-    # Gases not present in certain bands
-    if id == 1:
-        if idgaz == 3:  # O2 not in band 1
-            return None
-    elif id == 2:
-        if idgaz in [3, 4]:  # O2, O3 not in band 2
-            return None
-    elif id in [3, 4, 5, 6]:
-        if idgaz == 4:  # O3 not in bands 3-6
-            return None
-        if idgaz == 2 and id >= 4:  # CO2 not in bands 4-6
+    # Map (idgaz, id) to appropriate function
+    # id=1: regions 2500-5060 cm^-1
+    # id=2: regions 5060-7620 cm^-1
+    # id=3: regions 7620-10180 cm^-1
+    # id=4: regions 10180-12740 cm^-1
+    # id=5: regions 12740-15300 cm^-1
+    # id=6: regions 15300+ cm^-1
+
+    try:
+        if id == 1:
+            if idgaz == 1:
+                wava1(a, inu)
+            elif idgaz == 2:
+                dica1(a, inu)
+            elif idgaz == 3:
+                return None  # O2 not in band 1
+            elif idgaz == 4:
+                ozon1(a, inu)
+            elif idgaz == 5:
+                niox1(a, inu)
+            elif idgaz == 6:
+                meth1(a, inu)
+            elif idgaz == 7:
+                moca1(a, inu)
+        elif id == 2:
+            if idgaz == 1:
+                wava2(a, inu)
+            elif idgaz == 2:
+                dica2(a, inu)
+            elif idgaz == 3:
+                return None  # O2 not in band 2
+            elif idgaz == 4:
+                return None  # O3 not in band 2
+            elif idgaz == 5:
+                niox2(a, inu)
+            elif idgaz == 6:
+                meth2(a, inu)
+            elif idgaz == 7:
+                moca2(a, inu)
+        elif id == 3:
+            if idgaz == 1:
+                wava3(a, inu)
+            elif idgaz == 2:
+                dica3(a, inu)
+            elif idgaz == 3:
+                oxyg3(a, inu)
+            elif idgaz == 4:
+                return None  # O3 not in band 3
+            elif idgaz == 5:
+                niox3(a, inu)
+            elif idgaz == 6:
+                meth3(a, inu)
+            elif idgaz == 7:
+                moca3(a, inu)
+        elif id == 4:
+            if idgaz == 1:
+                wava4(a, inu)
+            elif idgaz == 2:
+                return None  # CO2 not in band 4
+            elif idgaz == 3:
+                oxyg4(a, inu)
+            elif idgaz == 4:
+                return None  # O3 not in band 4
+            elif idgaz == 5:
+                niox4(a, inu)
+            elif idgaz == 6:
+                meth4(a, inu)
+            elif idgaz == 7:
+                moca4(a, inu)
+        elif id == 5:
+            if idgaz == 1:
+                wava5(a, inu)
+            elif idgaz == 2:
+                return None  # CO2 not in band 5
+            elif idgaz == 3:
+                oxyg5(a, inu)
+            elif idgaz == 4:
+                return None  # O3 not in band 5
+            elif idgaz == 5:
+                niox5(a, inu)
+            elif idgaz == 6:
+                meth5(a, inu)
+            elif idgaz == 7:
+                moca5(a, inu)
+        elif id == 6:
+            if idgaz == 1:
+                wava6(a, inu)
+            elif idgaz == 2:
+                return None  # CO2 not in band 6
+            elif idgaz == 3:
+                oxyg6(a, inu)
+            elif idgaz == 4:
+                return None  # O3 not in band 6
+            elif idgaz == 5:
+                niox6(a, inu)
+            elif idgaz == 6:
+                meth6(a, inu)
+            elif idgaz == 7:
+                moca6(a, inu)
+        else:
             return None
 
-    # For now, return zeros until WAVA modules are implemented
-    # This will be replaced with calls to wava1-6, dica1-3, oxyg3-6, etc.
-    return np.zeros(8)
+        # Check if any coefficients were loaded
+        if np.all(a == 0):
+            return None
+
+        return a
+
+    except Exception:
+        # If loading fails, return None (no absorption)
+        return None
 
 
 __all__ = ['abstra', 'CO3', 'CCH2O', 'IVLI']
