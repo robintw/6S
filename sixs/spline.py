@@ -132,3 +132,107 @@ def splint(xa, ya, y2a, x):
          ((a**3 - a) * y2a[klo] + (b**3 - b) * y2a[khi]) * (h**2) / 6.0)
 
     return y
+
+
+def splie2(x2a, ya):
+    """
+    Calculate 2D cubic spline coefficients.
+
+    Performs spline initialization on a 2D tabulated function. Given an
+    m by n table ya[0:m-1, 0:n-1], and given an array x2a[0:n-1],
+    this routine constructs one-dimensional natural cubic splines of the
+    rows of ya and returns the second derivatives in the array y2a[0:m-1, 0:n-1].
+
+    Parameters
+    ----------
+    x2a : ndarray
+        Array of x2 values (n elements, must be monotonic)
+    ya : ndarray
+        2D array of function values (m x n)
+
+    Returns
+    -------
+    y2a : ndarray
+        2D array of second derivatives (m x n)
+
+    Notes
+    -----
+    Converted from Fortran SPLIE2.f. Uses natural spline boundary conditions
+    (yp1=ypn=1e30) for all rows.
+    """
+    m, n = ya.shape
+
+    # Initialize output array
+    y2a = np.zeros((m, n), dtype=np.float64)
+
+    # For each row, calculate spline coefficients
+    for j in range(m):
+        # Extract row j
+        ytmp = ya[j, :].copy()
+
+        # Calculate spline coefficients with natural boundary conditions
+        y2tmp = spline(x2a, ytmp, 1.0e30, 1.0e30)
+
+        # Store in output array
+        y2a[j, :] = y2tmp
+
+    return y2a
+
+
+def splin2(x1a, x2a, ya, y2a, x1, x2):
+    """
+    Evaluate 2D cubic spline interpolation.
+
+    Given x1a[0:m-1], x2a[0:n-1], tabulated function values ya[0:m-1, 0:n-1],
+    and tabulated second derivatives y2a[0:m-1, 0:n-1] (from splie2), and
+    given values x1 and x2, this routine returns an interpolated function value.
+
+    Parameters
+    ----------
+    x1a : ndarray
+        Array of x1 values (m elements, must be monotonic)
+    x2a : ndarray
+        Array of x2 values (n elements, must be monotonic)
+    ya : ndarray
+        2D array of function values (m x n)
+    y2a : ndarray
+        2D array of second derivatives from splie2 (m x n)
+    x1 : float
+        First coordinate at which to evaluate
+    x2 : float
+        Second coordinate at which to evaluate
+
+    Returns
+    -------
+    y : float
+        Interpolated function value at (x1, x2)
+
+    Notes
+    -----
+    Converted from Fortran SPLIN2.f. Performs bicubic spline interpolation:
+    1. Interpolates each row at x2 to get m values
+    2. Interpolates those m values at x1 to get final result
+    """
+    m = len(x1a)
+    n = len(x2a)
+
+    # Temporary arrays for intermediate interpolation
+    yytmp = np.zeros(m, dtype=np.float64)
+
+    # For each row, interpolate at x2
+    for j in range(m):
+        # Extract row j data and second derivatives
+        ytmp = ya[j, :].copy()
+        y2tmp = y2a[j, :].copy()
+
+        # Interpolate this row at x2
+        yytmp[j] = splint(x2a, ytmp, y2tmp, x2)
+
+    # Now interpolate the resulting 1D array at x1
+    # First calculate spline coefficients for yytmp
+    y2tmp = spline(x1a, yytmp, 1.0e30, 1.0e30)
+
+    # Finally interpolate at x1
+    y = splint(x1a, yytmp, y2tmp, x1)
+
+    return y
