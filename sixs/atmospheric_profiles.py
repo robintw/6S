@@ -1,7 +1,7 @@
 """
 Standard atmospheric profile models.
 
-Contains 6 standard atmospheric profiles from McClatchey et al.:
+Contains all 6 standard atmospheric profiles from McClatchey et al.:
 - Tropical
 - Midlatitude Summer
 - Midlatitude Winter
@@ -203,6 +203,102 @@ def midlatitude_winter():
     return AtmosphericProfile("Midlatitude Winter", _Z_LEVELS.copy(), p, t, wh, wo)
 
 
+def subarctic_summer():
+    """
+    Subarctic summer atmosphere profile (McClatchey).
+
+    Returns
+    -------
+    AtmosphericProfile
+        Subarctic summer profile
+    """
+    p = np.array([
+        1.010e+03, 8.960e+02, 7.929e+02, 7.000e+02, 6.160e+02, 5.410e+02,
+        4.730e+02, 4.130e+02, 3.590e+02, 3.107e+02, 2.677e+02, 2.300e+02,
+        1.977e+02, 1.700e+02, 1.460e+02, 1.250e+02, 1.080e+02, 9.280e+01,
+        7.980e+01, 6.860e+01, 5.890e+01, 5.070e+01, 4.360e+01, 3.750e+01,
+        3.227e+01, 2.780e+01, 1.340e+01, 6.610e+00, 3.400e+00, 1.810e+00,
+        9.870e-01, 7.070e-02, 3.000e-04, 0.000e+00
+    ], dtype=np.float64)
+
+    t = np.array([
+        2.870e+02, 2.820e+02, 2.760e+02, 2.710e+02, 2.660e+02, 2.600e+02,
+        2.530e+02, 2.460e+02, 2.390e+02, 2.320e+02, 2.250e+02, 2.250e+02,
+        2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02,
+        2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02, 2.250e+02,
+        2.260e+02, 2.280e+02, 2.350e+02, 2.470e+02, 2.620e+02, 2.740e+02,
+        2.770e+02, 2.160e+02, 2.100e+02, 2.100e+02
+    ], dtype=np.float64)
+
+    wh = np.array([
+        9.100e+00, 6.000e+00, 4.200e+00, 2.700e+00, 1.700e+00, 1.000e+00,
+        5.400e-01, 2.900e-01, 1.300e-01, 4.200e-02, 1.500e-02, 9.400e-03,
+        6.000e-03, 1.800e-03, 1.000e-03, 7.600e-04, 6.400e-04, 5.600e-04,
+        5.000e-04, 4.900e-04, 4.500e-04, 5.100e-04, 5.100e-04, 5.400e-04,
+        6.000e-04, 6.700e-04, 3.600e-04, 1.100e-04, 4.300e-05, 1.900e-05,
+        6.300e-06, 1.400e-07, 1.000e-09, 0.000e+00
+    ], dtype=np.float64)
+
+    wo = np.array([
+        4.900e-05, 5.400e-05, 5.600e-05, 5.800e-05, 6.000e-05, 6.400e-05,
+        7.100e-05, 7.500e-05, 7.900e-05, 1.100e-04, 1.300e-04, 1.800e-04,
+        2.100e-04, 2.600e-04, 2.800e-04, 3.200e-04, 3.400e-04, 3.900e-04,
+        4.100e-04, 4.100e-04, 3.900e-04, 3.600e-04, 3.200e-04, 3.000e-04,
+        2.800e-04, 2.600e-04, 1.400e-04, 9.200e-05, 4.100e-05, 1.300e-05,
+        4.300e-06, 8.600e-08, 4.300e-11, 0.000e+00
+    ], dtype=np.float64)
+
+    return AtmosphericProfile("Subarctic Summer", _Z_LEVELS.copy(), p, t, wh, wo)
+
+
+def subarctic_winter():
+    """
+    Subarctic winter atmosphere profile (McClatchey).
+
+    Returns
+    -------
+    AtmosphericProfile
+        Subarctic winter profile
+    """
+    p = np.array([
+        1.013e+03, 8.878e+02, 7.775e+02, 6.798e+02, 5.932e+02, 5.158e+02,
+        4.467e+02, 3.853e+02, 3.308e+02, 2.829e+02, 2.418e+02, 2.067e+02,
+        1.766e+02, 1.510e+02, 1.291e+02, 1.103e+02, 9.431e+01, 8.058e+01,
+        6.882e+01, 5.875e+01, 5.014e+01, 4.277e+01, 3.647e+01, 3.109e+01,
+        2.649e+01, 2.256e+01, 1.020e+01, 4.701e+00, 2.243e+00, 1.113e+00,
+        5.719e-01, 4.016e-02, 3.000e-04, 0.000e+00
+    ], dtype=np.float64)
+
+    t = np.array([
+        2.571e+02, 2.591e+02, 2.559e+02, 2.527e+02, 2.477e+02, 2.409e+02,
+        2.341e+02, 2.273e+02, 2.206e+02, 2.172e+02, 2.172e+02, 2.172e+02,
+        2.172e+02, 2.172e+02, 2.172e+02, 2.172e+02, 2.166e+02, 2.160e+02,
+        2.154e+02, 2.148e+02, 2.141e+02, 2.136e+02, 2.130e+02, 2.124e+02,
+        2.118e+02, 2.112e+02, 2.160e+02, 2.222e+02, 2.347e+02, 2.470e+02,
+        2.593e+02, 2.457e+02, 2.100e+02, 2.100e+02
+    ], dtype=np.float64)
+
+    wh = np.array([
+        1.200e+00, 1.200e+00, 9.400e-01, 6.800e-01, 4.100e-01, 2.000e-01,
+        9.800e-02, 5.400e-02, 1.100e-02, 8.400e-03, 5.500e-03, 3.800e-03,
+        2.600e-03, 1.800e-03, 1.000e-03, 7.600e-04, 6.400e-04, 5.600e-04,
+        5.000e-04, 4.900e-04, 4.500e-04, 5.100e-04, 5.100e-04, 5.400e-04,
+        6.000e-04, 6.700e-04, 3.600e-04, 1.100e-04, 4.300e-05, 1.900e-05,
+        6.300e-06, 1.400e-07, 1.000e-09, 0.000e+00
+    ], dtype=np.float64)
+
+    wo = np.array([
+        4.100e-05, 4.100e-05, 4.100e-05, 4.300e-05, 4.500e-05, 4.700e-05,
+        4.900e-05, 7.100e-05, 9.000e-05, 1.600e-04, 2.400e-04, 3.200e-04,
+        4.300e-04, 4.700e-04, 4.900e-04, 5.600e-04, 6.200e-04, 6.200e-04,
+        6.200e-04, 6.000e-04, 5.600e-04, 5.100e-04, 4.700e-04, 4.300e-04,
+        3.600e-04, 3.200e-04, 1.500e-04, 9.200e-05, 4.100e-05, 1.300e-05,
+        4.300e-06, 8.600e-08, 4.300e-11, 0.000e+00
+    ], dtype=np.float64)
+
+    return AtmosphericProfile("Subarctic Winter", _Z_LEVELS.copy(), p, t, wh, wo)
+
+
 def us_standard_1962():
     """
     US Standard Atmosphere 1962 profile (McClatchey).
@@ -256,6 +352,8 @@ _PROFILES: Dict[str, callable] = {
     'tropical': tropical,
     'midlatitude_summer': midlatitude_summer,
     'midlatitude_winter': midlatitude_winter,
+    'subarctic_summer': subarctic_summer,
+    'subarctic_winter': subarctic_winter,
     'us_standard_1962': us_standard_1962,
 }
 
@@ -268,7 +366,7 @@ def get_profile(name: str) -> AtmosphericProfile:
     ----------
     name : str
         Profile name: 'tropical', 'midlatitude_summer', 'midlatitude_winter',
-        'us_standard_1962'
+        'subarctic_summer', 'subarctic_winter', 'us_standard_1962'
 
     Returns
     -------
@@ -292,6 +390,8 @@ __all__ = [
     'tropical',
     'midlatitude_summer',
     'midlatitude_winter',
+    'subarctic_summer',
+    'subarctic_winter',
     'us_standard_1962',
     'get_profile',
 ]

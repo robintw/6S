@@ -11,6 +11,7 @@ sys.path.insert(0, '/home/user/6S')
 
 from sixs.atmospheric_profiles import (
     tropical, midlatitude_summer, midlatitude_winter,
+    subarctic_summer, subarctic_winter,
     us_standard_1962, get_profile
 )
 
@@ -41,6 +42,38 @@ def test_tropical_profile():
     assert np.all(np.diff(prof.p[:-2]) < 0)  # Pressure decreases with altitude
 
 
+def test_subarctic_summer_profile():
+    """Test subarctic summer profile."""
+    prof = subarctic_summer()
+
+    assert prof.name == "Subarctic Summer"
+    assert len(prof.z) == 34
+    assert prof.p[0] == 1.010e+03
+    assert 286 < prof.t[0] < 288  # ~14°C typical for subarctic summer
+
+    # Physical constraints
+    assert np.all(prof.p[:-1] > 0)
+    assert np.all(prof.t > 0)
+    assert np.all(prof.wh >= 0)
+    assert np.all(prof.wo >= 0)
+
+
+def test_subarctic_winter_profile():
+    """Test subarctic winter profile."""
+    prof = subarctic_winter()
+
+    assert prof.name == "Subarctic Winter"
+    assert len(prof.z) == 34
+    assert prof.p[0] == 1.013e+03
+    assert 256 < prof.t[0] < 258  # ~-16°C typical for subarctic winter
+
+    # Physical constraints
+    assert np.all(prof.p[:-1] > 0)
+    assert np.all(prof.t > 0)
+    assert np.all(prof.wh >= 0)
+    assert np.all(prof.wo >= 0)
+
+
 def test_us_standard_profile():
     """Test US Standard 1962 profile."""
     prof = us_standard_1962()
@@ -55,6 +88,12 @@ def test_get_profile():
     prof = get_profile('tropical')
     assert prof.name == "Tropical"
 
+    prof = get_profile('SUBARCTIC_SUMMER')  # Case insensitive
+    assert prof.name == "Subarctic Summer"
+
+    prof = get_profile('subarctic_winter')
+    assert prof.name == "Subarctic Winter"
+
     prof = get_profile('US_STANDARD_1962')  # Case insensitive
     assert prof.name == "US Standard 1962"
 
@@ -63,8 +102,15 @@ def test_get_profile():
 
 
 def test_profile_completeness():
-    """Test all profiles have complete data."""
-    profiles = [tropical(), midlatitude_summer(), midlatitude_winter(), us_standard_1962()]
+    """Test all 6 profiles have complete data."""
+    profiles = [
+        tropical(),
+        midlatitude_summer(),
+        midlatitude_winter(),
+        subarctic_summer(),
+        subarctic_winter(),
+        us_standard_1962()
+    ]
 
     for prof in profiles:
         # Check no NaN values
