@@ -15,6 +15,7 @@ from numba import jit
 
 # Import solar position from separate module
 from .possol import possol, day_number, pos_fft
+from .solar_irradiance import solirr, equivwl
 
 
 @jit(nopython=True)
@@ -65,4 +66,6 @@ __all__ = [
     'day_number',
     'pos_fft',
     'varsol',
+    'solirr',
+    'equivwl',
 ]
