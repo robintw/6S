@@ -149,12 +149,20 @@ class SixSInput:
             raise NotImplementedError(f"Aerosol model {self.iaer} not yet implemented")
 
         # 4. Aerosol optical thickness or visibility
-        vals = self._parse_floats(lines[line_idx])
-        if vals[0] < 0:
-            self.v = abs(vals[0])  # Visibility in km
-        else:
-            self.taer55 = vals[0]  # AOT at 550nm
+        # Fortran: if(v) 71,10,11 - three-way arithmetic IF
+        v_input = self._parse_float(lines[line_idx])
         line_idx += 1
+
+        if v_input < 0:
+            # Negative value: visibility in km
+            self.v = abs(v_input)
+        elif v_input == 0 or abs(v_input) < 1e-10:
+            # Zero: read AOT on next line (Fortran label 10)
+            self.taer55 = self._parse_float(lines[line_idx])
+            line_idx += 1
+        else:
+            # Positive value: visibility in km
+            self.v = v_input
 
         # 5. Target altitude
         self.pps = self._parse_float(lines[line_idx])
@@ -201,24 +209,49 @@ class SixSInput:
             line_idx += 1
 
         # 10. Surface properties
+        # Fortran: read inhomo, if(inhomo) 30,30,31
         self.inhomo = self._parse_int(lines[line_idx])
         line_idx += 1
 
-        if self.inhomo == 0:
-            # Homogeneous surface
-            self.roc = self._parse_float(lines[line_idx])
+        if self.inhomo <= 0:
+            # Homogeneous surface (Fortran label 30)
+            # Read idirec: directional effects
+            self.idirec = self._parse_int(lines[line_idx])
             line_idx += 1
+
+            if self.idirec <= 0:
+                # No directional effects (Fortran label 21)
+                # Read igroun: ground reflectance type
+                self.igroun = self._parse_int(lines[line_idx])
+                line_idx += 1
+
+                if self.igroun == 0:
+                    # Constant reflectance (Fortran label 32)
+                    self.roc = self._parse_float(lines[line_idx])
+                    line_idx += 1
+                elif self.igroun < 0:
+                    # User-defined spectral reflectance
+                    # TODO: implement spectral reflectance read
+                    pass
+                # else: igroun > 0 uses predefined surfaces (vegetation, water, etc.)
+
+                # When idirec <= 0, go directly to atmospheric correction (label 34)
+                # ibrdf is NOT read in this path!
+            else:
+                # idirec > 0: has BRDF effects (Fortran label 25)
+                # Read ibrdf after computation
+                self.ibrdf = self._parse_int(lines[line_idx])
+                line_idx += 1
         else:
-            # Inhomogeneous surface
+            # Inhomogeneous surface (Fortran label 31)
             vals = self._parse_floats(lines[line_idx])
             self.roc, self.roe, self.rad = vals[:3]
             line_idx += 1
 
-        # 11. BRDF model
-        self.ibrdf = self._parse_int(lines[line_idx])
-        line_idx += 1
+        # Polarization (irop, optional with end=37)
+        # For now, skip this as it's optional
 
-        # 12. Atmospheric correction mode
+        # Atmospheric correction mode
         vals = self._parse_floats(lines[line_idx])
         self.radiance = vals[0]
         if vals[0] > 0:

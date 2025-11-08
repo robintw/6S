@@ -16,11 +16,12 @@ from sixs.output_formatter import SixSOutput
 def test_basic_run():
     """Test basic 6SV run with minimal input."""
 
-    # User-provided input
+    # User-provided input (works with original Fortran 6S)
     input_text = """0
 32.000000 264.000000 23.000000 190.000000 7 14
 2
 2
+0
 0.500000
 0.000000
 0.000000
