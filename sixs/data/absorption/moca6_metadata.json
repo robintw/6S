@@ -1,0 +1,15 @@
+{
+  "name": "moca6",
+  "description": "c     carbon monoxide (15300 - 17870 cm-1)",
+  "n_intervals": 256,
+  "n_coefficients": 6,
+  "coefficient_names": [
+    "c1",
+    "c2",
+    "c3",
+    "c4",
+    "c5",
+    "c6"
+  ],
+  "wavenumber_unit": "cm^-1"
+}

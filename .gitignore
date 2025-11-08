@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution
+build/
+dist/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test_output.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data
+sixs/data/*.h5
+sixs/data/*.npz
+!sixs/data/.gitkeep

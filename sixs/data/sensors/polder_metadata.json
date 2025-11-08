@@ -1,0 +1,41 @@
+{
+  "sensor": "polder",
+  "num_bands": 8,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.4125,
+      "wavelength_upper": 0.4775
+    },
+    "band_2": {
+      "wavelength_lower": 0.41,
+      "wavelength_upper": 0.5225
+    },
+    "band_3": {
+      "wavelength_lower": 0.5325,
+      "wavelength_upper": 0.595
+    },
+    "band_4": {
+      "wavelength_lower": 0.63,
+      "wavelength_upper": 0.7025
+    },
+    "band_5": {
+      "wavelength_lower": 0.745,
+      "wavelength_upper": 0.78
+    },
+    "band_6": {
+      "wavelength_lower": 0.7,
+      "wavelength_upper": 0.83
+    },
+    "band_7": {
+      "wavelength_lower": 0.81,
+      "wavelength_upper": 0.92
+    },
+    "band_8": {
+      "wavelength_lower": 0.865,
+      "wavelength_upper": 0.94
+    }
+  }
+}

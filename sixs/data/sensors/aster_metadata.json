@@ -1,0 +1,49 @@
+{
+  "sensor": "aster",
+  "num_bands": 10,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.485,
+      "wavelength_upper": 0.6425
+    },
+    "band_2": {
+      "wavelength_lower": 0.59,
+      "wavelength_upper": 0.73
+    },
+    "band_3": {
+      "wavelength_lower": 0.72,
+      "wavelength_upper": 0.9075
+    },
+    "band_4": {
+      "wavelength_lower": 0.72,
+      "wavelength_upper": 0.9225
+    },
+    "band_5": {
+      "wavelength_lower": 1.57,
+      "wavelength_upper": 1.7675
+    },
+    "band_6": {
+      "wavelength_lower": 2.12,
+      "wavelength_upper": 2.2825
+    },
+    "band_7": {
+      "wavelength_lower": 2.15,
+      "wavelength_upper": 2.295
+    },
+    "band_8": {
+      "wavelength_lower": 2.21,
+      "wavelength_upper": 2.39
+    },
+    "band_9": {
+      "wavelength_lower": 2.25,
+      "wavelength_upper": 2.44
+    },
+    "band_10": {
+      "wavelength_lower": 2.2975,
+      "wavelength_upper": 2.4875
+    }
+  }
+}

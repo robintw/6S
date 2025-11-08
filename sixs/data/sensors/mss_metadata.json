@@ -1,0 +1,25 @@
+{
+  "sensor": "mss",
+  "num_bands": 4,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.4749999,
+      "wavelength_upper": 0.6399999
+    },
+    "band_2": {
+      "wavelength_lower": 0.5799999,
+      "wavelength_upper": 0.75
+    },
+    "band_3": {
+      "wavelength_lower": 0.6549999,
+      "wavelength_upper": 0.8549998
+    },
+    "band_4": {
+      "wavelength_lower": 0.7849999,
+      "wavelength_upper": 1.1
+    }
+  }
+}

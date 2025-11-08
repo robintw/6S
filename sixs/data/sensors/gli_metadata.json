@@ -1,0 +1,129 @@
+{
+  "sensor": "gli",
+  "num_bands": 30,
+  "array_size": 1501,
+  "wavelength_range": "0.25-4.0 \u00b5m",
+  "wavelength_step": 0.0025,
+  "bands": {
+    "band_1": {
+      "wavelength_lower": 0.37,
+      "wavelength_upper": 0.3925
+    },
+    "band_2": {
+      "wavelength_lower": 0.3875,
+      "wavelength_upper": 0.4125
+    },
+    "band_3": {
+      "wavelength_lower": 0.3975,
+      "wavelength_upper": 0.4275
+    },
+    "band_4": {
+      "wavelength_lower": 0.4325,
+      "wavelength_upper": 0.4525
+    },
+    "band_5": {
+      "wavelength_lower": 0.4475,
+      "wavelength_upper": 0.47
+    },
+    "band_6": {
+      "wavelength_lower": 0.475,
+      "wavelength_upper": 0.505
+    },
+    "band_7": {
+      "wavelength_lower": 0.5075,
+      "wavelength_upper": 0.5325
+    },
+    "band_8": {
+      "wavelength_lower": 0.5275,
+      "wavelength_upper": 0.56
+    },
+    "band_9": {
+      "wavelength_lower": 0.5475,
+      "wavelength_upper": 0.5825
+    },
+    "band_10": {
+      "wavelength_lower": 0.61,
+      "wavelength_upper": 0.64
+    },
+    "band_11": {
+      "wavelength_lower": 0.6525,
+      "wavelength_upper": 0.6825
+    },
+    "band_12": {
+      "wavelength_lower": 0.665,
+      "wavelength_upper": 0.695
+    },
+    "band_13": {
+      "wavelength_lower": 0.6625,
+      "wavelength_upper": 0.6975
+    },
+    "band_14": {
+      "wavelength_lower": 0.6925,
+      "wavelength_upper": 0.7275
+    },
+    "band_15": {
+      "wavelength_lower": 0.6925,
+      "wavelength_upper": 0.7275
+    },
+    "band_16": {
+      "wavelength_lower": 0.7325,
+      "wavelength_upper": 0.7675
+    },
+    "band_17": {
+      "wavelength_lower": 0.75,
+      "wavelength_upper": 0.775
+    },
+    "band_18": {
+      "wavelength_lower": 0.84,
+      "wavelength_upper": 0.8925
+    },
+    "band_19": {
+      "wavelength_lower": 0.85,
+      "wavelength_upper": 0.88
+    },
+    "band_20": {
+      "wavelength_lower": 0.415,
+      "wavelength_upper": 0.5075
+    },
+    "band_21": {
+      "wavelength_lower": 0.505,
+      "wavelength_upper": 0.58
+    },
+    "band_22": {
+      "wavelength_lower": 0.6075,
+      "wavelength_upper": 0.715
+    },
+    "band_23": {
+      "wavelength_lower": 0.745,
+      "wavelength_upper": 0.9075
+    },
+    "band_24": {
+      "wavelength_lower": 1.03,
+      "wavelength_upper": 1.07
+    },
+    "band_25": {
+      "wavelength_lower": 1.085,
+      "wavelength_upper": 1.19
+    },
+    "band_26": {
+      "wavelength_lower": 1.22,
+      "wavelength_upper": 1.2625
+    },
+    "band_27": {
+      "wavelength_lower": 1.3475,
+      "wavelength_upper": 1.415
+    },
+    "band_28": {
+      "wavelength_lower": 1.515,
+      "wavelength_upper": 1.77
+    },
+    "band_29": {
+      "wavelength_lower": 2.055,
+      "wavelength_upper": 2.345
+    },
+    "band_30": {
+      "wavelength_lower": 3.22,
+      "wavelength_upper": 4.0
+    }
+  }
+}
