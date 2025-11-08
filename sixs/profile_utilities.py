@@ -185,26 +185,35 @@ def presplane(
 
     # Find bounding levels for interpolation
     i = 0
-    while z[i] <= xpp:
+    while i < 33 and z[i] <= xpp:
         i += 1
-    isup = i
-    iinf = i - 1
+    isup = min(i, 33)
+    iinf = max(i - 1, 0)
 
-    # Log-linear interpolation for pressure
-    xa = (z[isup] - z[iinf]) / np.log(p[isup] / p[iinf])
-    xb = z[isup] - xa * np.log(p[isup])
-    ps = np.exp((xpp - xb) / xa)
-
-    # Linear interpolation for temperature, water vapor, ozone
+    # Linear interpolation for atmospheric properties
     xalt = xpp
-    xtemp = (t[isup] - t[iinf]) / (z[isup] - z[iinf])
-    xtemp = xtemp * (xalt - z[iinf]) + t[iinf]
 
-    xwo = (wo[isup] - wo[iinf]) / (z[isup] - z[iinf])
-    xwo = xwo * (xalt - z[iinf]) + wo[iinf]
+    # Handle edge case where isup == iinf (beyond atmosphere)
+    if isup == iinf or z[isup] == z[iinf]:
+        ps = p[iinf]
+        xtemp = t[iinf]
+        xwo = wo[iinf]
+        xwh = wh[iinf]
+    else:
+        # Log-linear interpolation for pressure
+        xa = (z[isup] - z[iinf]) / np.log(p[isup] / p[iinf])
+        xb = z[isup] - xa * np.log(p[isup])
+        ps = np.exp((xpp - xb) / xa)
 
-    xwh = (wh[isup] - wh[iinf]) / (z[isup] - z[iinf])
-    xwh = xwh * (xalt - z[iinf]) + wh[iinf]
+        # Linear interpolation for temperature, water vapor, ozone
+        xtemp = (t[isup] - t[iinf]) / (z[isup] - z[iinf])
+        xtemp = xtemp * (xalt - z[iinf]) + t[iinf]
+
+        xwo = (wo[isup] - wo[iinf]) / (z[isup] - z[iinf])
+        xwo = xwo * (xalt - z[iinf]) + wo[iinf]
+
+        xwh = (wh[isup] - wh[iinf]) / (z[isup] - z[iinf])
+        xwh = xwh * (xalt - z[iinf]) + wh[iinf]
 
     # Create modified profile
     zpl = np.zeros(34)
@@ -351,14 +360,16 @@ def pressure(
     wh[0] = xwh
     wo[0] = xwo
 
-    # Shift remaining levels
-    for i in range(1, 33 - iinf + 2):
-        if i + iinf - 1 < len(z):
-            z[i] = z[i + iinf - 1]
-            p[i] = p[i + iinf - 1]
-            t[i] = t[i + iinf - 1]
-            wh[i] = wh[i + iinf - 1]
-            wo[i] = wo[i + iinf - 1]
+    # Shift remaining levels (Fortran: do i=2,33-iinf+1)
+    # In Python 0-indexed: i goes from 1 to 32-iinf+1
+    for i in range(1, min(33 - iinf + 1, 34)):
+        src_idx = i + iinf - 1
+        if src_idx < 34:
+            z[i] = z[src_idx]
+            p[i] = p[src_idx]
+            t[i] = t[src_idx]
+            wh[i] = wh[src_idx]
+            wo[i] = wo[src_idx]
 
     # Fill in remaining levels with linear interpolation
     l = 33 - iinf + 1

@@ -160,8 +160,8 @@ class SixSInput:
         self.pps = self._parse_float(lines[line_idx])
         line_idx += 1
 
-        # 6. Sensor altitude
-        self.palt = self._parse_float(lines[line_idx])
+        # 6. Sensor altitude (Fortran negates this: xpp=-xpp)
+        self.palt = -self._parse_float(lines[line_idx])
         line_idx += 1
 
         # 7. Water vapor and ozone at sensor (if needed)
