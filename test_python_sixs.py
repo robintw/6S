@@ -64,12 +64,10 @@ def test_basic_run():
         output.write(output_file)
         print(f"   ✓ Output formatted ({len(output_file.getvalue())} chars)")
 
-        # Show sample output
-        print("\n4. Sample output:")
+        # Show full output
+        print("\n4. Full output:")
         print("-" * 70)
-        lines = output_file.getvalue().split('\n')[:30]
-        for line in lines:
-            print(line)
+        print(output_file.getvalue())
         print("-" * 70)
 
         print("\n✓ All tests passed!")
