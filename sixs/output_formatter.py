@@ -284,3 +284,18 @@ class SixSOutput:
         file.write(f"* phase function (P)     : {0.75:10.6f} (aerosol+rayleigh)                     *\n")
         file.write("*                                                                       *\n")
         self._write_separator(file)
+
+        # Solar spectrum
+        file.write("*                                                                       *\n")
+        file.write("*                                                                       *\n")
+        file.write("*                                                                       *\n")
+        file.write("*                                                                       *\n")
+        file.write("*                      sol. spect (in w/m2/mic)                               *\n")
+
+        # Calculate integrated solar spectrum
+        from sixs.solar_spectral import solirr
+        es = solirr(self.results.wlmoy) * self.results.dsol
+
+        file.write(f"*                                {es:8.3f}                                     *\n")
+        file.write("*                                                                       *\n")
+        self._write_separator(file)
