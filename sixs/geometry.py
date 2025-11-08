@@ -151,9 +151,10 @@ def poslan(month, jday, tu, xlon, xlat):
     return asol, phi0, avis, phiv
 
 
-def _goes_geometry(month, jday, tu, nc, nl, sat_lon):
+def _geostationary_geometry(month, jday, tu, nc, nl, sat_lon,
+                            nl_center, nc_center, alti_km, deltax_deg, deltay_deg):
     """
-    Generic GOES satellite geometry calculation.
+    Generic geostationary satellite geometry calculation.
 
     Parameters
     ----------
@@ -169,6 +170,16 @@ def _goes_geometry(month, jday, tu, nc, nl, sat_lon):
         Line number in satellite image
     sat_lon : float
         Satellite sub-point longitude (degrees)
+    nl_center : float
+        Line number at image center
+    nc_center : float
+        Column number at image center
+    alti_km : float
+        Satellite altitude (km)
+    deltax_deg : float
+        Pixel size in x direction (degrees/pixel)
+    deltay_deg : float
+        Pixel size in y direction (degrees/pixel)
 
     Returns
     -------
@@ -192,15 +203,14 @@ def _goes_geometry(month, jday, tu, nc, nl, sat_lon):
 
     Notes
     -----
-    Converts GOES pixel coordinates to lat/lon using satellite projection.
-    Based on geostationary satellite geometry.
+    Converts geostationary satellite pixel coordinates to lat/lon.
+    Used for GOES, Meteosat, and other geostationary platforms.
     """
     # Pixel coordinates relative to center
-    yr = float(nl) - 8665.5
-    xr = float(nc) - 6498.5
+    yr = float(nl) - nl_center
+    xr = float(nc) - nc_center
 
     # Earth and satellite parameters
-    alti = 42107.0 - 6378.155  # Satellite altitude (km)
     re = 6378.155              # Earth equatorial radius (km)
     aaa = 1.0 / 297.0          # Earth flattening coefficient
     rp = re / (1.0 + aaa)      # Polar radius
@@ -209,15 +219,11 @@ def _goes_geometry(month, jday, tu, nc, nl, sat_lon):
     cdr = pi / 180.0  # Degrees to radians
     crd = 180.0 / pi  # Radians to degrees
 
-    # Pixel size in degrees
-    deltax = 18.0 / 12997.0
-    deltay = 20.0 / 17331.0
-
     # Convert pixel offsets to angular coordinates
-    x = xr * deltax * cdr
-    y = yr * deltay * cdr
+    x = xr * deltax_deg * cdr
+    y = yr * deltay_deg * cdr
 
-    rs = re + alti  # Satellite distance from Earth center
+    rs = re + alti_km  # Satellite distance from Earth center
 
     # Trigonometric calculations
     tanx = np.tan(x)
@@ -252,7 +258,7 @@ def _goes_geometry(month, jday, tu, nc, nl, sat_lon):
     ylon = xlon * pi / 180.0 + sat_lon * cdr
     ylat = xlat * pi / 180.0
     gam = np.sqrt(((1.0 / cosx2) - 1.0) * cosx2)
-    avis = np.arcsin((1.0 + alti / re) * gam)
+    avis = np.arcsin((1.0 + alti_km / re) * gam)
     avis = avis * 180.0 / pi
     phiv = np.arctan2(np.tan(ylon), np.sin(ylat)) + pi
     phiv = phiv * 180.0 / pi
@@ -300,7 +306,16 @@ def posge(month, jday, tu, nc, nl):
     Converted from Fortran POSGE.f
     GOES East is positioned at 75°W longitude.
     """
-    return _goes_geometry(month, jday, tu, nc, nl, sat_lon=75.0)
+    # GOES East parameters
+    nl_center = 8665.5
+    nc_center = 6498.5
+    alti_km = 42107.0 - 6378.155
+    deltax_deg = 18.0 / 12997.0
+    deltay_deg = 20.0 / 17331.0
+    sat_lon = 75.0
+
+    return _geostationary_geometry(month, jday, tu, nc, nl, sat_lon,
+                                    nl_center, nc_center, alti_km, deltax_deg, deltay_deg)
 
 
 def posgw(month, jday, tu, nc, nl):
@@ -343,7 +358,68 @@ def posgw(month, jday, tu, nc, nl):
     Converted from Fortran POSGW.f
     GOES West is positioned at 135°W longitude.
     """
-    return _goes_geometry(month, jday, tu, nc, nl, sat_lon=135.0)
+    # GOES West parameters (same as East except longitude)
+    nl_center = 8665.5
+    nc_center = 6498.5
+    alti_km = 42107.0 - 6378.155
+    deltax_deg = 18.0 / 12997.0
+    deltay_deg = 20.0 / 17331.0
+    sat_lon = 135.0
+
+    return _geostationary_geometry(month, jday, tu, nc, nl, sat_lon,
+                                    nl_center, nc_center, alti_km, deltax_deg, deltay_deg)
+
+
+def posmto(month, jday, tu, nc, nl):
+    """
+    Calculate geometry for Meteosat satellite.
+
+    Converts pixel coordinates to geographic coordinates and calculates
+    solar and viewing geometry for Meteosat geostationary satellite.
+
+    Parameters
+    ----------
+    month : int
+        Month (1-12)
+    jday : int
+        Day of month (1-31)
+    tu : float
+        Universal time (decimal hours)
+    nc : int
+        Column number in Meteosat image
+    nl : int
+        Line number in Meteosat image
+
+    Returns
+    -------
+    asol : float
+        Solar zenith angle (degrees)
+    phi0 : float
+        Solar azimuth angle (degrees)
+    avis : float
+        Viewing zenith angle (degrees)
+    phiv : float
+        Viewing azimuth angle (degrees)
+    xlon : float
+        Scene longitude (degrees)
+    xlat : float
+        Scene latitude (degrees)
+
+    Notes
+    -----
+    Converted from Fortran POSMTO.f
+    Meteosat is positioned at 0°E longitude (Prime Meridian).
+    """
+    # Meteosat parameters
+    nl_center = 1250.5
+    nc_center = 2500.5
+    alti_km = 42164.0 - 6378.155
+    deltax_deg = 18.0 / 5000.0
+    deltay_deg = 18.0 / 2500.0
+    sat_lon = 0.0
+
+    return _geostationary_geometry(month, jday, tu, nc, nl, sat_lon,
+                                    nl_center, nc_center, alti_km, deltax_deg, deltay_deg)
 
 
 __all__ = [
@@ -357,4 +433,5 @@ __all__ = [
     'poslan',
     'posge',
     'posgw',
+    'posmto',
 ]

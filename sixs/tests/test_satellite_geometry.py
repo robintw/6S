@@ -9,7 +9,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/user/6S')
 
-from sixs.geometry import posspo, poslan, posge, posgw
+from sixs.geometry import posspo, poslan, posge, posgw, posmto
 
 
 def test_posspo_basic():
@@ -290,6 +290,129 @@ def test_goes_east_west_different_longitudes():
     # Longitudes should be different (60° apart for sat positions)
     # GOES East at 75°W, GOES West at 135°W
     assert abs(xlon_e - xlon_w) > 50  # Should differ significantly
+
+
+def test_posmto_basic():
+    """Test Meteosat satellite geometry calculation."""
+    # Center pixel coordinates
+    month = 6
+    jday = 15
+    tu = 12.0  # Noon UTC = noon at 0°E
+    nc = 2500  # Near center column
+    nl = 1250  # Near center line
+
+    asol, phi0, avis, phiv, xlon, xlat = posmto(month, jday, tu, nc, nl)
+
+    # All values should be finite
+    assert np.isfinite(asol)
+    assert np.isfinite(phi0)
+    assert np.isfinite(avis)
+    assert np.isfinite(phiv)
+    assert np.isfinite(xlon)
+    assert np.isfinite(xlat)
+
+    # Solar zenith should be reasonable
+    assert 0 <= asol <= 90
+
+    # Viewing zenith should be small for near-center pixels
+    assert 0 <= avis < 90
+
+    # Latitude should be close to equator for center pixel
+    assert abs(xlat) < 10
+
+    # Longitude should be close to Meteosat position (0°E)
+    assert -30 < xlon < 30
+
+
+def test_posmto_viewing_angles():
+    """Test that Meteosat has non-zero viewing angles for off-center pixels."""
+    # Off-center pixel
+    month = 6
+    jday = 15
+    tu = 12.0
+    nc = 3000  # Off-center column
+    nl = 1500  # Off-center line
+
+    asol, phi0, avis, phiv, xlon, xlat = posmto(month, jday, tu, nc, nl)
+
+    # Viewing angle should be non-zero for off-center pixels
+    assert avis > 0
+
+    # Viewing angles should be reasonable
+    assert 0 < avis < 90
+    assert 0 <= phiv <= 360
+
+
+def test_posmto_invalid_pixel():
+    """Test that invalid Meteosat pixels raise appropriate error."""
+    month = 6
+    jday = 15
+    tu = 12.0
+
+    # Pixel way outside visible disk
+    nc = 10000
+    nl = 10000
+
+    with pytest.raises(ValueError, match="outside Earth disk"):
+        posmto(month, jday, tu, nc, nl)
+
+
+def test_meteosat_vs_goes_consistency():
+    """Test that geostationary satellites use consistent algorithm."""
+    # All three satellites should give similar viewing angles
+    # for pixels at the same angular offset from center
+    month = 6
+    jday = 15
+
+    # Calculate pixel offsets that are proportional
+    # GOES: center at (6498.5, 8665.5)
+    # Meteosat: center at (2500.5, 1250.5)
+
+    # Use small offset from center for all
+    offset_frac = 0.01  # 1% offset
+
+    # GOES East
+    nc_goes = 6498.5 + offset_frac * 6498.5
+    nl_goes = 8665.5 + offset_frac * 8665.5
+    _, _, avis_goes, _, _, _ = posge(month, jday, 12.0, int(nc_goes), int(nl_goes))
+
+    # Meteosat
+    nc_met = 2500.5 + offset_frac * 2500.5
+    nl_met = 1250.5 + offset_frac * 1250.5
+    _, _, avis_met, _, _, _ = posmto(month, jday, 12.0, int(nc_met), int(nl_met))
+
+    # Both should have small but non-zero viewing angles
+    assert 0 < avis_goes < 5
+    assert 0 < avis_met < 5
+
+
+def test_all_geostationary_satellites():
+    """Test all three geostationary satellites at once."""
+    month = 6
+    jday = 15
+
+    # Use appropriate times and center pixels
+    asol_ge, phi0_ge, avis_ge, phiv_ge, xlon_ge, xlat_ge = posge(
+        month, jday, 12.0, 6500, 8665)
+    asol_gw, phi0_gw, avis_gw, phiv_gw, xlon_gw, xlat_gw = posgw(
+        month, jday, 21.0, 6500, 8665)
+    asol_mt, phi0_mt, avis_mt, phiv_mt, xlon_mt, xlat_mt = posmto(
+        month, jday, 12.0, 2500, 1250)
+
+    # All should have small viewing angles at center
+    assert avis_ge < 2
+    assert avis_gw < 2
+    assert avis_mt < 2
+
+    # All should be near equator
+    assert abs(xlat_ge) < 5
+    assert abs(xlat_gw) < 5
+    assert abs(xlat_mt) < 5
+
+    # Longitudes should match satellite positions
+    assert -80 < xlon_ge < -70   # GOES East at 75°W
+    assert -140 < xlon_gw < -130  # GOES West at 135°W
+    assert -5 < xlon_mt < 5       # Meteosat at 0°E
 
 
 if __name__ == '__main__':
