@@ -61,6 +61,96 @@ def varsol(jday, month):
     return dsol
 
 
+def posspo(month, jday, tu, xlon, xlat):
+    """
+    Calculate solar and viewing geometry for SPOT satellite.
+
+    SPOT is a nadir-viewing satellite, so viewing zenith and azimuth are zero.
+
+    Parameters
+    ----------
+    month : int
+        Month (1-12)
+    jday : int
+        Day of month (1-31)
+    tu : float
+        Universal time (decimal hours)
+    xlon : float
+        Scene center longitude (degrees, -180 to 180)
+    xlat : float
+        Scene center latitude (degrees, -90 to 90)
+
+    Returns
+    -------
+    asol : float
+        Solar zenith angle (degrees)
+    phi0 : float
+        Solar azimuth angle (degrees)
+    avis : float
+        Viewing zenith angle (degrees, always 0 for nadir)
+    phiv : float
+        Viewing azimuth angle (degrees, always 0 for nadir)
+
+    Notes
+    -----
+    Converted from Fortran POSSPO.f
+    SPOT observes in nadir viewing mode.
+    """
+    # SPOT is nadir viewing
+    avis = 0.0
+    phiv = 0.0
+
+    # Calculate solar position
+    asol, phi0 = possol(month, jday, tu, xlon, xlat)
+
+    return asol, phi0, avis, phiv
+
+
+def poslan(month, jday, tu, xlon, xlat):
+    """
+    Calculate solar and viewing geometry for Landsat satellite.
+
+    Landsat is a nadir-viewing satellite, so viewing zenith and azimuth are zero.
+
+    Parameters
+    ----------
+    month : int
+        Month (1-12)
+    jday : int
+        Day of month (1-31)
+    tu : float
+        Universal time (decimal hours)
+    xlon : float
+        Scene center longitude (degrees, -180 to 180)
+    xlat : float
+        Scene center latitude (degrees, -90 to 90)
+
+    Returns
+    -------
+    asol : float
+        Solar zenith angle (degrees)
+    phi0 : float
+        Solar azimuth angle (degrees)
+    avis : float
+        Viewing zenith angle (degrees, always 0 for nadir)
+    phiv : float
+        Viewing azimuth angle (degrees, always 0 for nadir)
+
+    Notes
+    -----
+    Converted from Fortran POSLAN.f
+    Landsat observes in nadir viewing mode.
+    """
+    # Landsat is nadir viewing
+    avis = 0.0
+    phiv = 0.0
+
+    # Calculate solar position
+    asol, phi0 = possol(month, jday, tu, xlon, xlat)
+
+    return asol, phi0, avis, phiv
+
+
 __all__ = [
     'possol',
     'day_number',
@@ -68,4 +158,6 @@ __all__ = [
     'varsol',
     'solirr',
     'equivwl',
+    'posspo',
+    'poslan',
 ]
