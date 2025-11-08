@@ -902,11 +902,587 @@ def iso(iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt, nt, mu, rm, gb):
     return xf
 
 
+def os(iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
+       phirad, nt, mu, naz, rm, gb, rp):
+    """
+    Successive orders of scattering with full angular radiances.
+
+    Computes angle-dependent radiances and look-up tables for atmospheric
+    scattering using the successive orders method with Fourier decomposition.
+
+    Parameters
+    ----------
+    iaer_prof : int
+        Aerosol profile flag (0=standard, 1=user-defined)
+    tamoy : float
+        Total aerosol optical depth
+    trmoy : float
+        Total Rayleigh optical depth
+    pizmoy : float
+        Aerosol single scattering albedo
+    tamoyp : float
+        Aerosol optical depth above observation plane
+    trmoyp : float
+        Rayleigh optical depth above observation plane
+    palt : float
+        Observation altitude (km, 0-900)
+    phirad : float
+        Azimuthal angle (radians)
+    nt : int
+        Number of atmospheric layers
+    mu : int
+        Number of Gauss quadrature points
+    naz : int
+        Number of azimuth angles
+    rm : ndarray
+        Gauss quadrature angles (-mu:mu)
+    gb : ndarray
+        Gauss quadrature weights (-mu:mu)
+    rp : ndarray
+        Azimuth angles for output (naz)
+
+    Returns
+    -------
+    xl : ndarray
+        Radiances at angles (-mu:mu, naz)
+    xlphim : ndarray
+        Radiances at plane level (nfi)
+    rolut : ndarray
+        Look-up table radiances (mu, 41)
+    filut : ndarray
+        Look-up table azimuth angles (mu, 41)
+    nfilut : ndarray
+        Number of angles per viewing angle (mu)
+
+    Notes
+    -----
+    Converted from Fortran OS.f (670 lines)
+
+    This function extends ISO by:
+    - Computing radiances at multiple viewing/azimuth angles
+    - Generating look-up tables for interpolation
+    - Full Fourier decomposition in azimuth
+
+    The algorithm:
+    1. Discretizes atmosphere into layers
+    2. Initializes look-up table angles
+    3. Performs Fourier decomposition (0 to iborm):
+       - Computes scattering kernels
+       - Calculates primary scattering
+       - Integrates vertically (up and down)
+       - Iterates successive orders until convergence
+       - Accumulates Fourier components
+    4. Returns angle-dependent radiances
+    """
+    import numpy as np_module
+    from sixs.successive_orders import _atm_state
+
+    # Constants
+    hr = 8.0  # Rayleigh scale height (km)
+    accu = 1.0e-20
+    accu2 = 1.0e-3
+    pi = np_module.pi
+
+    snt = nt
+    ta = tamoy
+    tr = trmoy
+    trp = trmoy - trmoyp
+    tap = tamoy - tamoyp
+    piz = pizmoy
+
+    iplane = 0
+    mum1 = mu - 1
+
+    # Compute aerosol scale height
+    if palt <= 900.0 and palt > 0.0:
+        if tap > 1.0e-03:
+            ha = -palt / np.log(tap / ta)
+        else:
+            ha = 2.0
+        ntp = nt - 1
+    else:
+        ha = 2.0
+        ntp = nt
+
+    xmus = -rm[mu]
+
+    # Atmospheric layering
+    h = np_module.zeros(nt + 1)
+    ch = np_module.zeros(nt + 1)
+    ydel = np_module.zeros(nt + 1)
+    xdel = np_module.zeros(nt + 1)
+    altc = np_module.zeros(nt + 1)
+
+    # Case 1: Pure Rayleigh
+    if ta <= accu2 and tr > ta:
+        for j in range(ntp + 1):
+            h[j] = j * tr / ntp
+            ch[j] = np_module.exp(-h[j] / xmus) / 2.0
+            ydel[j] = 1.0
+            xdel[j] = 0.0
+            if j == 0:
+                altc[j] = 300.0
+            else:
+                altc[j] = -np_module.log(h[j] / tr) * hr
+
+    # Case 2: Pure aerosol
+    if tr <= accu2 and ta > tr:
+        for j in range(ntp + 1):
+            h[j] = j * ta / ntp
+            ch[j] = np_module.exp(-h[j] / xmus) / 2.0
+            ydel[j] = 0.0
+            xdel[j] = piz
+            if j == 0:
+                altc[j] = 300.0
+            else:
+                altc[j] = -np_module.log(h[j] / ta) * ha
+
+    # Case 3: Mixed Rayleigh-aerosol (standard profile)
+    if tr > accu2 and ta > accu2 and iaer_prof == 0:
+        ydel[0] = 1.0
+        xdel[0] = 0.0
+        h[0] = 0.0
+        ch[0] = 0.5
+        altc[0] = 300.0
+        zx = 300.0
+
+        for it in range(ntp + 1):
+            if it == 0:
+                yy = 0.0
+                dd = 0.0
+            else:
+                yy = h[it - 1]
+                dd = ydel[it - 1]
+
+            zx, delta = discre(ta, ha, tr, hr, it, ntp, yy, dd, 300.0, 0.0)
+
+            xx = -zx / ha
+            if xx <= -20.0:
+                ca = 0.0
+            else:
+                ca = ta * np_module.exp(xx)
+
+            xx = -zx / hr
+            cr = tr * np_module.exp(xx)
+            h[it] = cr + ca
+            altc[it] = zx
+            ch[it] = np_module.exp(-h[it] / xmus) / 2.0
+            cr = cr / hr
+            ca = ca / ha
+            ratio = cr / (cr + ca)
+            xdel[it] = (1.0 - ratio) * piz
+            ydel[it] = ratio
+
+    # Case 4: Mixed Rayleigh-aerosol (user profile)
+    if tr > accu2 and ta > accu2 and iaer_prof == 1:
+        h_tmp, ch_tmp, ydel_tmp, xdel_tmp, altc_tmp = aero_prof(
+            ta, piz, tr, hr, ntp, xmus
+        )
+        h[:ntp+1] = h_tmp[:ntp+1]
+        ch[:ntp+1] = ch_tmp[:ntp+1]
+        ydel[:ntp+1] = ydel_tmp[:ntp+1]
+        xdel[:ntp+1] = xdel_tmp[:ntp+1]
+        altc[:ntp+1] = altc_tmp[:ntp+1]
+
+    # Update plane layer if necessary
+    if ntp == nt - 1:
+        taup = tap + trp
+        iplane = -1
+        for i in range(ntp + 1):
+            if taup >= h[i]:
+                iplane = i
+
+        th = 0.0005
+        xt1 = abs(h[iplane] - taup)
+        xt2 = abs(h[iplane + 1] - taup)
+
+        if xt1 > th and xt2 > th:
+            # Shift layers
+            for i in range(nt, iplane, -1):
+                xdel[i] = xdel[i - 1]
+                ydel[i] = ydel[i - 1]
+                h[i] = h[i - 1]
+                altc[i] = altc[i - 1]
+                ch[i] = ch[i - 1]
+        else:
+            nt = ntp
+            if xt2 < xt1:
+                iplane = iplane + 1
+
+        h[iplane] = taup
+        if tr > accu2 and ta > accu2:
+            ca = ta * np_module.exp(-palt / ha)
+            cr = tr * np_module.exp(-palt / hr)
+            h[iplane] = ca + cr
+            cr = cr / hr
+            ca = ca / ha
+            ratio = cr / (cr + ca)
+            xdel[iplane] = (1.0 - ratio) * piz
+            ydel[iplane] = ratio
+            altc[iplane] = palt
+            ch[iplane] = np_module.exp(-h[iplane] / xmus) / 2.0
+
+        if tr > accu2 and ta <= accu2:
+            ydel[iplane] = 1.0
+            xdel[iplane] = 0.0
+            altc[iplane] = palt
+
+        if tr <= accu2 and ta > accu2:
+            ydel[iplane] = 0.0
+            xdel[iplane] = 1.0 * piz
+            altc[iplane] = palt
+
+    # Initialize output arrays
+    phi = phirad
+    nfi = 13  # Number of azimuth angles for plane observation
+    xl = np_module.zeros((2*mu + 1, naz))
+    xlphim = np_module.zeros(nfi)
+
+    # Look-up table initialization
+    max_lut_angles = 41  # Max number of scattering angles
+    rolut = np_module.zeros((mu, max_lut_angles))
+    filut = np_module.zeros((mu, max_lut_angles))
+    nfilut = np_module.zeros(mu, dtype=np_module.int32)
+
+    its = np_module.arccos(xmus) * 180.0 / pi
+    for i in range(mu):
+        lutmuv = rm[mu + 1 + i]  # Positive mu values
+        luttv = np_module.arccos(lutmuv) * 180.0 / pi
+        iscama = 180.0 - abs(luttv - its)
+        iscami = 180.0 - (luttv + its)
+        nbisca = int((iscama - iscami) / 4.0) + 1
+        # Clamp to max_lut_angles
+        nbisca = min(nbisca, max_lut_angles)
+        nfilut[i] = nbisca
+        filut[i, 0] = 0.0
+        filut[i, nbisca - 1] = 180.0
+        scaa = iscama
+        for j in range(1, nbisca - 1):
+            scaa = scaa - 4.0
+            cscaa = np_module.cos(scaa * pi / 180.0)
+            cfi = -(cscaa + xmus * lutmuv) / (
+                np_module.sqrt(1.0 - xmus**2) * np_module.sqrt(1.0 - lutmuv**2)
+            )
+            cfi = max(-1.0, min(1.0, cfi))  # Clamp to valid range
+            filut[i, j] = np_module.arccos(cfi) * 180.0 / pi
+
+    # Rayleigh phase function parameters
+    delta = _atm_state.delta
+    aaaa = delta / (2.0 - delta)
+    ron = (1.0 - aaaa) / (1.0 + 2.0 * aaaa)
+    beta0 = 1.0
+    beta2 = 0.5 * ron
+
+    # Fourier decomposition
+    i4 = np_module.zeros(2*mu + 1)
+    iborm = _atm_state.nquad - 3
+    if abs(xmus - 1.0) < 1.0e-06:
+        iborm = 0
+
+    # Main Fourier loop
+    for is_val in range(iborm + 1):
+        ig = 1
+        roavion0 = 0.0
+        roavion1 = 0.0
+        roavion2 = 0.0
+        roavion = 0.0
+        i3 = np_module.zeros(2*mu + 1)
+
+        # Kernel computations
+        xpl, psl, bp = kernel(is_val, mu, rm)
+
+        if is_val > 0:
+            beta0_curr = 0.0
+        else:
+            beta0_curr = beta0
+
+        # Primary scattering source function
+        i2 = np_module.zeros((nt + 1, 2*mu + 1))
+        for j in range(2*mu + 1):
+            if is_val <= 2:
+                spl = xpl[mu]  # xpl(0)
+                sa1 = beta0_curr + beta2 * xpl[j] * spl
+                sa2 = bp[0, j]
+            else:
+                sa2 = bp[0, j]
+                sa1 = 0.0
+
+            for k in range(nt + 1):
+                c = ch[k]
+                a = ydel[k]
+                b = xdel[k]
+                i2[k, j] = c * (sa2 * b + sa1 * a)
+
+        # Vertical integration - primary upward radiation
+        i1 = np_module.zeros((nt + 1, 2*mu + 1))
+        for k in range(mu + 1, 2*mu + 1):  # Positive mu
+            i1[nt, k] = 0.0
+            zi1 = i1[nt, k]
+            yy = rm[k]
+            for i in range(nt - 1, -1, -1):
+                jj = i + 1
+                f = h[jj] - h[i]
+                a_coef = (i2[jj, k] - i2[i, k]) / f
+                b_coef = i2[i, k] - a_coef * h[i]
+                c = np_module.exp(-f / yy)
+                d = 1.0 - c
+                xx = h[i] - h[jj] * c
+                zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                i1[i, k] = zi1
+
+        # Vertical integration - primary downward radiation
+        for k in range(mu):  # Negative mu
+            i1[0, k] = 0.0
+            zi1 = i1[0, k]
+            yy = rm[k]
+            for i in range(1, nt + 1):
+                jj = i - 1
+                f = h[i] - h[jj]
+                c = np_module.exp(f / yy)
+                d = 1.0 - c
+                a_coef = (i2[i, k] - i2[jj, k]) / f
+                b_coef = i2[i, k] - a_coef * h[i]
+                xx = h[i] - h[jj] * c
+                zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                i1[i, k] = zi1
+
+        # Initialize for successive orders
+        inm1 = np_module.zeros(2*mu + 1)
+        inm2 = np_module.zeros(2*mu + 1)
+        in_current = np_module.zeros(2*mu + 1)
+
+        for k in range(2*mu + 1):
+            if k < mu:
+                index = nt
+            else:
+                index = 0
+            inm1[k] = i1[index, k]
+            inm2[k] = i1[index, k]
+            i3[k] = i1[index, k]
+
+        roavion2 = i1[iplane, 2*mu]
+        roavion = i1[iplane, 2*mu]
+
+        # Loop on successive orders
+        igmax = _atm_state.igmax
+        for ig in range(2, igmax + 1):
+            # Multiple scattering source function
+            if is_val <= 2:
+                for k in range(mu + 1, 2*mu + 1):
+                    xpk = xpl[k]
+                    ypk = xpl[2*mu - k]
+                    for i in range(nt + 1):
+                        ii1 = 0.0
+                        ii2 = 0.0
+                        x = xdel[i]
+                        y = ydel[i]
+                        for j in range(mu + 1, 2*mu + 1):
+                            xpj = xpl[j]
+                            z = gb[j]
+                            xi1 = i1[i, j]
+                            xi2 = i1[i, 2*mu - j]
+                            bpjk = bp[j - mu, k] * x + y * (beta0_curr + beta2 * xpj * xpk)
+                            bpjmk = bp[j - mu, 2*mu - k] * x + y * (beta0_curr + beta2 * xpj * ypk)
+                            xdb = z * (xi1 * bpjk + xi2 * bpjmk)
+                            ii2 += xdb
+                            xdb = z * (xi1 * bpjmk + xi2 * bpjk)
+                            ii1 += xdb
+                        if abs(ii2) < 1.0e-30:
+                            ii2 = 0.0
+                        if abs(ii1) < 1.0e-30:
+                            ii1 = 0.0
+                        i2[i, k] = ii2
+                        i2[i, 2*mu - k] = ii1
+            else:
+                for k in range(mu + 1, 2*mu + 1):
+                    for i in range(nt + 1):
+                        ii1 = 0.0
+                        ii2 = 0.0
+                        x = xdel[i]
+                        for j in range(mu + 1, 2*mu + 1):
+                            z = gb[j]
+                            xi1 = i1[i, j]
+                            xi2 = i1[i, 2*mu - j]
+                            bpjk = bp[j - mu, k] * x
+                            bpjmk = bp[j - mu, 2*mu - k] * x
+                            xdb = z * (xi1 * bpjk + xi2 * bpjmk)
+                            ii2 += xdb
+                            xdb = z * (xi1 * bpjmk + xi2 * bpjk)
+                            ii1 += xdb
+                        if abs(ii2) < 1.0e-30:
+                            ii2 = 0.0
+                        if abs(ii1) < 1.0e-30:
+                            ii1 = 0.0
+                        i2[i, k] = ii2
+                        i2[i, 2*mu - k] = ii1
+
+            # Vertical integration - upward
+            for k in range(mu + 1, 2*mu + 1):
+                i1[nt, k] = 0.0
+                zi1 = i1[nt, k]
+                yy = rm[k]
+                for i in range(nt - 1, -1, -1):
+                    jj = i + 1
+                    f = h[jj] - h[i]
+                    a_coef = (i2[jj, k] - i2[i, k]) / f
+                    b_coef = i2[i, k] - a_coef * h[i]
+                    c = np_module.exp(-f / yy)
+                    d = 1.0 - c
+                    xx = h[i] - h[jj] * c
+                    zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zi1) <= 1.0e-20:
+                        zi1 = 0.0
+                    i1[i, k] = zi1
+
+            # Vertical integration - downward
+            for k in range(mu):
+                i1[0, k] = 0.0
+                zi1 = i1[0, k]
+                yy = rm[k]
+                for i in range(1, nt + 1):
+                    jj = i - 1
+                    f = h[i] - h[jj]
+                    c = np_module.exp(f / yy)
+                    d = 1.0 - c
+                    a_coef = (i2[i, k] - i2[jj, k]) / f
+                    b_coef = i2[i, k] - a_coef * h[i]
+                    xx = h[i] - h[jj] * c
+                    zi1 = c * zi1 + (d * (b_coef + a_coef * yy) + a_coef * xx) * 0.5
+                    if abs(zi1) <= 1.0e-20:
+                        zi1 = 0.0
+                    i1[i, k] = zi1
+
+            # Extract current order
+            for k in range(2*mu + 1):
+                if k < mu:
+                    index = nt
+                else:
+                    index = 0
+                in_current[k] = i1[index, k]
+
+            roavion0 = i1[iplane, 2*mu]
+
+            # Convergence test (geometric series)
+            if ig > 2:
+                z = 0.0
+                a1 = roavion2
+                d1 = roavion1
+                g1 = roavion0
+                if a1 >= accu and d1 >= accu and roavion >= accu:
+                    y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/roavion))
+                    z = max(z, y)
+
+                for l in range(2*mu + 1):
+                    if l == mu:
+                        continue
+                    a1 = inm2[l]
+                    d1 = inm1[l]
+                    g1 = in_current[l]
+                    if a1 <= accu or d1 <= accu or i3[l] <= accu:
+                        continue
+                    y = abs(((g1/d1 - d1/a1) / ((1.0 - g1/d1)**2)) * (g1/i3[l]))
+                    z = max(z, y)
+
+                if z < 0.0001:
+                    # Successful convergence - apply geometric series
+                    for l in range(2*mu + 1):
+                        y1 = 1.0
+                        d1 = inm1[l]
+                        g1 = in_current[l]
+                        if d1 > accu and abs(g1 - d1) > accu:
+                            y1 = 1.0 - g1/d1
+                            g1 = g1 / y1
+                            i3[l] += g1
+
+                    d1 = roavion1
+                    g1 = roavion0
+                    if d1 >= accu and abs(g1 - d1) >= accu:
+                        y1 = 1.0 - g1/d1
+                        g1 = g1 / y1
+                        roavion += g1
+
+                    break
+
+                # Store n-2 order
+                for k in range(2*mu + 1):
+                    inm2[k] = inm1[k]
+                roavion2 = roavion1
+
+            # Store n-1 order
+            for k in range(2*mu + 1):
+                inm1[k] = in_current[k]
+            roavion1 = roavion0
+
+            # Add to total
+            for l in range(2*mu + 1):
+                i3[l] += in_current[l]
+            roavion += roavion0
+
+            # Check if order is small enough
+            z = 0.0
+            for l in range(2*mu + 1):
+                if abs(i3[l]) >= accu:
+                    y = abs(in_current[l] / i3[l])
+                    z = max(z, y)
+
+            if z < 0.00001:
+                break
+
+        # Sum Fourier components
+        delta0s = 1.0 if is_val == 0 else 2.0
+        for l in range(2*mu + 1):
+            i4[l] += delta0s * i3[l]
+
+        # Accumulate angle-dependent radiances
+        for l in range(naz):
+            phi_curr = rp[l]
+            for m in range(mum1 + 1):
+                if m >= mu:
+                    xl[m, l] += delta0s * i3[m] * np_module.cos(is_val * (phi_curr + pi))
+                else:
+                    xl[m, l] += delta0s * i3[m] * np_module.cos(is_val * phi_curr)
+
+        # Look-up table generation
+        for m in range(mu):
+            for l in range(nfilut[m]):
+                phimul = filut[m, l] * pi / 180.0
+                rolut[m, l] += delta0s * i3[mu + 1 + m] * np_module.cos(is_val * (phimul + pi))
+
+        # Special values
+        if is_val == 0:
+            for k in range(mu + 1, 2*mu + 1):
+                xl[mu, 0] += rm[k] * gb[k] * i3[2*mu - k]
+
+        xl[2*mu, 0] += delta0s * i3[2*mu] * np_module.cos(is_val * (phirad + pi))
+
+        for ifi in range(nfi):
+            phimul = ifi * pi / (nfi - 1)
+            xlphim[ifi] += delta0s * roavion * np_module.cos(is_val * (phimul + pi))
+
+        xl[0, 0] += delta0s * roavion * np_module.cos(is_val * (phirad + pi))
+
+        # Check Fourier convergence
+        z = 0.0
+        for l in range(2*mu + 1):
+            if abs(i4[l]) >= accu:
+                x = abs(i3[l] / i4[l])
+                z = max(z, x)
+
+        if z <= 0.001:
+            break
+
+    # Restore nt
+    nt = snt
+
+    return xl, xlphim, rolut, filut, nfilut
+
+
 __all__ = [
     'discre',
     'kernel',
     'aero_prof',
     'iso',
+    'os',
     'set_aerosol_phase_function',
     'set_aerosol_profile',
     'AtmosphereState',

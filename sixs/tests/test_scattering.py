@@ -760,5 +760,138 @@ def test_odrayl_realistic_values():
             f"At {wl} μm, expected {min_expected}-{max_expected}, got {tray}"
 
 
+# ===== Tests for os function =====
+
+def test_os_basic():
+    """Test basic OS (successive orders) calculation."""
+    from sixs.successive_orders import os
+
+    # Basic test parameters
+    iaer_prof = 0  # Standard aerosol profile
+    tamoy = 0.2    # Total aerosol optical depth
+    trmoy = 0.1    # Total Rayleigh optical depth
+    pizmoy = 0.9   # Aerosol single scattering albedo
+    tamoyp = 0.0   # No plane observation
+    trmoyp = 0.0
+    palt = 0.0     # Ground level
+    phirad = 0.0   # Azimuth angle
+    nt = 25        # Number of layers
+    mu = 8         # Number of quadrature points
+    naz = 1  # Number of azimuth outputs
+
+    # Initialize Gauss quadrature
+    rm = np.zeros(2*mu + 1)
+    gb = np.zeros(2*mu + 1)
+    x_gauss, w_gauss = np.polynomial.legendre.leggauss(mu)
+    rm_gauss = (x_gauss + 1.0) / 2.0
+    rm[0:mu] = -rm_gauss[::-1]
+    rm[mu] = -0.8  # Solar zenith angle cosine (avoid 0)
+    rm[mu+1:2*mu+1] = rm_gauss
+    gb[1:mu+1] = w_gauss[::-1] / 2.0
+    gb[mu+1:2*mu+1] = w_gauss / 2.0
+
+    rp = np.array([0.0])  # Azimuth angle
+
+    # Call OS function
+    xl, xlphim, rolut, filut, nfilut = os(
+        iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
+        phirad, nt, mu, naz, rm, gb, rp
+    )
+
+    # Check output shapes
+    assert xl.shape == (2*mu + 1, naz)
+    assert xlphim.shape == (13,)  # Fixed number of plane azimuth angles
+    assert rolut.shape == (mu, 41)
+    assert filut.shape == (mu, 41)
+    assert nfilut.shape == (mu,)
+
+    # Check that radiances are finite
+    assert np.all(np.isfinite(xl))
+    assert np.all(np.isfinite(xlphim))
+
+    # Check that look-up table angles are reasonable
+    for i in range(mu):
+        n_angles = nfilut[i]
+        assert 0 < n_angles <= 41
+        # First angle should be 0, last should be 180
+        assert filut[i, 0] == 0.0
+        assert filut[i, n_angles - 1] == 180.0
+
+
+def test_os_pure_rayleigh():
+    """Test OS with pure Rayleigh scattering."""
+    from sixs.successive_orders import os
+
+    iaer_prof = 0
+    tamoy = 0.0    # No aerosol
+    trmoy = 0.1    # Rayleigh only
+    pizmoy = 1.0
+    tamoyp = 0.0
+    trmoyp = 0.0
+    palt = 0.0
+    phirad = 0.0
+    nt = 25
+    mu = 8
+    naz = 1
+
+    rm = np.zeros(2*mu + 1)
+    gb = np.zeros(2*mu + 1)
+    x_gauss, w_gauss = np.polynomial.legendre.leggauss(mu)
+    rm_gauss = (x_gauss + 1.0) / 2.0
+    rm[0:mu] = -rm_gauss[::-1]
+    rm[mu] = -0.8  # Solar zenith angle cosine (avoid 0)
+    rm[mu+1:2*mu+1] = rm_gauss
+    gb[1:mu+1] = w_gauss[::-1] / 2.0
+    gb[mu+1:2*mu+1] = w_gauss / 2.0
+
+    rp = np.array([0.0])
+
+    xl, xlphim, rolut, filut, nfilut = os(
+        iaer_prof, tamoy, trmoy, pizmoy, tamoyp, trmoyp, palt,
+        phirad, nt, mu, naz, rm, gb, rp
+    )
+
+    # All values should be finite and non-negative for Rayleigh scattering
+    assert np.all(np.isfinite(xl))
+    assert np.all(xl >= 0)
+
+
+def test_os_wavelength_independence():
+    """Test that OS handles different atmospheric conditions."""
+    from sixs.successive_orders import os
+
+    mu = 8
+    nt = 25
+
+    # Setup quadrature
+    rm = np.zeros(2*mu + 1)
+    gb = np.zeros(2*mu + 1)
+    x_gauss, w_gauss = np.polynomial.legendre.leggauss(mu)
+    rm_gauss = (x_gauss + 1.0) / 2.0
+    rm[0:mu] = -rm_gauss[::-1]
+    rm[mu] = -0.8  # Solar zenith angle cosine (avoid 0)
+    rm[mu+1:2*mu+1] = rm_gauss
+    gb[1:mu+1] = w_gauss[::-1] / 2.0
+    gb[mu+1:2*mu+1] = w_gauss / 2.0
+
+    rp = np.array([0.0])
+
+    # Test two different optical depths
+    optical_depths = [
+        (0.1, 0.05),  # Low optical depth
+        (0.3, 0.15),  # Higher optical depth
+    ]
+
+    for tamoy, trmoy in optical_depths:
+        xl, xlphim, rolut, filut, nfilut = os(
+            0, tamoy, trmoy, 0.9, 0.0, 0.0, 0.0,
+            0.0, nt, mu, 1, rm, gb, rp
+        )
+
+        # Should produce valid outputs
+        assert np.all(np.isfinite(xl))
+        assert xl.shape == (2*mu + 1, 1)
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
