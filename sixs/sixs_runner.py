@@ -323,14 +323,17 @@ class SixSRunner:
     def _compute_spectral(self):
         """Compute spectral properties and equivalent wavelength."""
         if self.input.iwave == -1:
+            # Monochromatic wavelength
+            wlmoy = self.input.wlinf  # wlinf = wlsup for monochromatic
+        elif self.input.iwave == -2 or self.input.iwave == 0:
+            # Wavelength range with uniform filter (filter = 1)
+            wlmoy = (self.input.wlinf + self.input.wlsup) / 2.0
+        elif self.input.iwave == 1:
             # User-defined filter function
             iinf = self.input.iinf
             isup = self.input.isup
             s = self.input.s
             wlmoy = equivwl(iinf, isup, self.step, s)
-        elif self.input.iwave == 0:
-            # Monochromatic
-            wlmoy = self.input.wl
         else:
             # Predefined sensor band (would need sensor response functions)
             wlmoy = 0.55  # Default to visible

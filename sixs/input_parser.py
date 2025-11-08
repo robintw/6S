@@ -181,13 +181,23 @@ class SixSInput:
         line_idx += 1
 
         if self.iwave == -1:
+            # Monochromatic wavelength
+            wl = self._parse_float(lines[line_idx])
+            self.wlinf = wl
+            self.wlsup = wl
+            line_idx += 1
+        elif self.iwave == -2 or self.iwave == 0:
+            # Wavelength range (filter function = 1)
+            vals = self._parse_floats(lines[line_idx])
+            self.wlinf, self.wlsup = vals[:2]
+            line_idx += 1
+        elif self.iwave == 1:
             # User-defined filter function
             vals = self._parse_floats(lines[line_idx])
-            self.iinf, self.isup = int(vals[0]), int(vals[1])
+            self.wlinf, self.wlsup = vals[:2]
             line_idx += 1
-            # Read spectral response
-            vals = self._parse_floats(lines[line_idx])
-            self.s[self.iinf:self.isup+1] = vals[:(self.isup-self.iinf+1)]
+            # Read spectral response (by steps of 0.0025 µm)
+            # TODO: implement reading filter function
             line_idx += 1
 
         # 10. Surface properties

@@ -16,23 +16,22 @@ from sixs.output_formatter import SixSOutput
 def test_basic_run():
     """Test basic 6SV run with minimal input."""
 
-    # Create minimal input (similar to Example_In_1.txt but simplified)
+    # User-provided input
     input_text = """0
-40.0 100.0 45.0 50.0 7 23
-8
-3.0 3.5
-4
-0.25 0.25 0.25 0.25
-0.5
--0.2
--3.3
--1.5 -3.5
-0.25
-11
-1
-2 1 0.5
-1
--0.1
+32.000000 264.000000 23.000000 190.000000 7 14
+2
+2
+0
+0.500000
+0.000000
+0.000000
+-1
+0.500000
+0
+0
+0
+0.3
+-1
 """
 
     print("Testing Python 6SV implementation...")

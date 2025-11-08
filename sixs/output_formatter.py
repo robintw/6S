@@ -128,11 +128,13 @@ class SixSOutput:
         file.write("*                       spectral condition                              *\n")
         file.write("*                       ------------------                              *\n")
 
-        if self.input.iwave == 0:
+        if self.input.iwave == -1:
             file.write(f"*           monochromatic calculation at wl = {self.results.wlmoy:.3f} micron            *\n")
-        elif self.input.iwave == -1:
+        elif self.input.iwave == -2 or self.input.iwave == 0:
+            file.write(f"*           wl inf= {self.input.wlinf:.3f} mic   wl sup= {self.input.wlsup:.3f} mic                *\n")
+        elif self.input.iwave == 1:
             file.write("*           user defined filter function                                *\n")
-            file.write(f"*               wl inf= {0.25 + self.input.iinf * self.input.s.step:.3f} mic   wl sup= {0.25 + self.input.isup * 0.0025:.3f} mic                *\n")
+            file.write(f"*               wl inf= {self.input.wlinf:.3f} mic   wl sup= {self.input.wlsup:.3f} mic                *\n")
         else:
             file.write(f"*           predefined sensor band {self.input.iwave:3d}                                  *\n")
 
