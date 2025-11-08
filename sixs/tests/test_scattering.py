@@ -9,7 +9,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/user/6S')
 
-from sixs.scattering import chand, scatra
+from sixs.scattering import chand, scatra, odrayl
 
 
 def test_chand_basic():
@@ -583,6 +583,181 @@ def test_scatra_consistency():
 
                     assert 0 <= result[component]['ddir'] <= 1
                     assert 0 <= result[component]['udir'] <= 1
+
+
+# ===== Tests for odrayl function =====
+
+def test_odrayl_basic():
+    """Test basic Rayleigh optical depth calculation."""
+    # Create a simple standard atmosphere profile
+    # US Standard Atmosphere (simplified)
+    z = np.array([  # Altitude in km
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 30, 35, 40, 45, 50,
+        70, 100, 120
+    ])
+    p = np.array([  # Pressure in mb
+        1013.25, 898.76, 794.95, 701.09, 616.40, 540.19, 471.81, 410.61,
+        355.99, 307.42, 264.36, 226.32, 193.30, 165.11, 141.02, 120.45,
+        103.01, 88.21, 75.65, 64.95, 55.83,
+        47.99, 41.27, 35.51, 30.57, 26.32, 11.97, 5.75, 2.87, 1.49, 0.80,
+        0.05, 0.0003, 0.00001
+    ])
+    t = np.array([  # Temperature in K
+        288.15, 281.65, 275.15, 268.65, 262.17, 255.68, 249.19, 242.70,
+        236.21, 229.73, 223.25, 216.77, 216.65, 216.65, 216.65, 216.65,
+        216.65, 216.65, 216.65, 216.65, 216.65,
+        217.65, 218.65, 219.65, 220.65, 221.65, 226.65, 236.65, 250.65,
+        264.65, 270.65, 219.65, 210.65, 190.65
+    ])
+
+    # Test at visible wavelength (550 nm = 0.55 μm)
+    wl = 0.55
+    tray = odrayl(wl, z, p, t)
+
+    # Rayleigh optical depth should be positive
+    assert tray > 0
+
+    # For 550 nm, typical Rayleigh optical depth is ~0.1
+    assert 0.05 < tray < 0.3
+
+
+def test_odrayl_wavelength_dependence():
+    """Test that Rayleigh optical depth follows lambda^-4 scaling."""
+    # Simple atmosphere
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)  # Exponential decay
+    t = np.full(34, 288.15)  # Isothermal
+
+    # Test at two wavelengths with 2:1 ratio
+    wl1 = 0.4  # 400 nm (blue)
+    wl2 = 0.8  # 800 nm (near-IR)
+
+    tray1 = odrayl(wl1, z, p, t)
+    tray2 = odrayl(wl2, z, p, t)
+
+    # Rayleigh scattering ~ lambda^-4
+    # So tray1 / tray2 should be approximately (wl2/wl1)^4 = 2^4 = 16
+    ratio = tray1 / tray2
+    expected_ratio = (wl2 / wl1)**4
+
+    # Allow 10% tolerance for numerical effects
+    assert abs(ratio - expected_ratio) / expected_ratio < 0.1
+
+
+def test_odrayl_positive():
+    """Test that Rayleigh optical depth is always positive."""
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)
+    t = np.full(34, 288.15)
+
+    # Test several wavelengths
+    wavelengths = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5, 2.0]
+
+    for wl in wavelengths:
+        tray = odrayl(wl, z, p, t)
+        assert tray > 0, f"Optical depth should be positive at {wl} μm"
+        assert np.isfinite(tray), f"Optical depth should be finite at {wl} μm"
+
+
+def test_odrayl_visible_range():
+    """Test Rayleigh optical depth in visible spectrum."""
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)
+    t = np.full(34, 288.15)
+
+    # Visible spectrum
+    wl_blue = 0.45  # 450 nm
+    wl_green = 0.55  # 550 nm
+    wl_red = 0.65  # 650 nm
+
+    tray_blue = odrayl(wl_blue, z, p, t)
+    tray_green = odrayl(wl_green, z, p, t)
+    tray_red = odrayl(wl_red, z, p, t)
+
+    # Blue should scatter more than green, green more than red
+    assert tray_blue > tray_green > tray_red
+
+    # Check reasonable values for standard atmosphere
+    assert 0.05 < tray_green < 0.15  # Typical value at 550 nm
+
+
+def test_odrayl_pressure_dependence():
+    """Test that optical depth increases with surface pressure."""
+    z = np.linspace(0, 120, 34)
+    t = np.full(34, 288.15)
+    wl = 0.55
+
+    # Two atmospheres with different surface pressures
+    p1 = 1013.25 * np.exp(-z / 8.0)  # Standard
+    p2 = 1200.0 * np.exp(-z / 8.0)   # Higher pressure
+
+    tray1 = odrayl(wl, z, p1, t)
+    tray2 = odrayl(wl, z, p2, t)
+
+    # Higher pressure should give higher optical depth
+    assert tray2 > tray1
+
+
+def test_odrayl_temperature_independence():
+    """Test that optical depth is weakly dependent on temperature."""
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)
+    wl = 0.55
+
+    # Two different temperature profiles
+    t1 = np.full(34, 288.15)  # Standard
+    t2 = np.full(34, 300.0)   # Warmer
+
+    tray1 = odrayl(wl, z, p, t1)
+    tray2 = odrayl(wl, z, p, t2)
+
+    # Temperature affects density, so warmer = less dense = less scattering
+    assert tray1 > tray2
+
+    # But effect should be small (~ 10%)
+    assert abs(tray1 - tray2) / tray1 < 0.1
+
+
+def test_odrayl_uv_vs_ir():
+    """Test that UV has much higher scattering than IR."""
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)
+    t = np.full(34, 288.15)
+
+    wl_uv = 0.3  # UV (300 nm)
+    wl_ir = 2.0  # Near-IR (2000 nm)
+
+    tray_uv = odrayl(wl_uv, z, p, t)
+    tray_ir = odrayl(wl_ir, z, p, t)
+
+    # UV should have much higher scattering
+    ratio = tray_uv / tray_ir
+    expected_ratio = (wl_ir / wl_uv)**4  # ~1200
+
+    # Should be close to lambda^-4 scaling (within 15% due to refractive index variation)
+    assert abs(ratio - expected_ratio) / expected_ratio < 0.15
+
+
+def test_odrayl_realistic_values():
+    """Test that optical depths match typical atmospheric values."""
+    # US Standard Atmosphere
+    z = np.linspace(0, 120, 34)
+    p = 1013.25 * np.exp(-z / 8.0)
+    t = np.full(34, 288.15)
+
+    # Common wavelengths
+    test_cases = [
+        (0.55, 0.07, 0.12),   # 550 nm: expect ~0.09
+        (0.44, 0.12, 0.25),   # 440 nm: expect ~0.23
+        (0.87, 0.01, 0.03),   # 870 nm: expect ~0.015
+    ]
+
+    for wl, min_expected, max_expected in test_cases:
+        tray = odrayl(wl, z, p, t)
+        assert min_expected < tray < max_expected, \
+            f"At {wl} μm, expected {min_expected}-{max_expected}, got {tray}"
 
 
 if __name__ == '__main__':

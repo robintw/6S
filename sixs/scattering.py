@@ -7,6 +7,7 @@ in the atmosphere.
 Functions:
     chand: Chandrasekhar function for molecular reflectance
     scatra: Scattering transmittance calculation
+    odrayl: Rayleigh optical depth calculation
 """
 
 import numpy as np
@@ -411,8 +412,94 @@ def scatra(iaer_prof, taer, taerp, tray, trayp, piza, palt, nt, mu, rm, gb,
     return result
 
 
+def odrayl(wl, z, p, t):
+    """
+    Calculate Rayleigh (molecular) optical depth as a function of wavelength.
+
+    Uses the Edlen (1966) formula for air refraction index and integrates
+    over atmospheric layers to compute total Rayleigh optical depth.
+
+    Parameters
+    ----------
+    wl : float
+        Wavelength in micrometers (μm)
+    z : array_like
+        Altitude levels in km, shape (34,)
+    p : array_like
+        Pressure levels in mb, shape (34,)
+    t : array_like
+        Temperature levels in K, shape (34,)
+
+    Returns
+    -------
+    tray : float
+        Total Rayleigh optical depth (dimensionless)
+
+    Notes
+    -----
+    Converted from Fortran ODRAYL.f
+
+    The calculation uses:
+    - Air refraction index from Edlen 1966 (Metrologia, 2, 71-80)
+    - Depolarization factor delta (from global state, typically 0.0279)
+    - Integration over 33 atmospheric layers
+
+    References
+    ----------
+    Edlen, B. (1966). The refractive index of air. Metrologia, 2(2), 71.
+
+    Examples
+    --------
+    >>> # Standard atmosphere profile
+    >>> z = np.array([...])  # 34 altitude levels
+    >>> p = np.array([...])  # 34 pressure levels
+    >>> t = np.array([...])  # 34 temperature levels
+    >>> wl = 0.55  # 550 nm in microns
+    >>> tray = odrayl(wl, z, p, t)
+    """
+    from sixs.successive_orders import _atm_state
+
+    # Constants
+    pi = 3.1415926
+    ak = 1.0 / wl
+    awl = wl
+
+    # Get depolarization factor from global state
+    delta = _atm_state.delta  # typically 0.0279
+
+    # Air refraction index (Edlen 1966, Metrologia 2, 71-80)
+    # Setting partial water vapor pressure pw=0
+    a1 = 130.0 - ak * ak
+    a2 = 38.9 - ak * ak
+    a3 = 2406030.0 / a1
+    a4 = 15997.0 / a2
+    an = (8342.13 + a3 + a4) * 1.0e-08
+    an = an + 1.0
+
+    # Rayleigh scattering cross section
+    a = (24.0 * pi**3) * ((an * an - 1.0)**2) * (6.0 + 3.0 * delta) / (6.0 - 7.0 * delta)
+    a = a / ((an * an + 2.0)**2)
+
+    # Integrate over atmospheric layers
+    tray = 0.0
+    ns = 2.54743e+19  # Number density at standard conditions
+
+    for k in range(33):  # 33 layers (0-32)
+        # Average pressure-temperature ratio for layer
+        dppt = (288.15 / 1013.25) * (p[k] / t[k] + p[k+1] / t[k+1]) / 2.0
+
+        # Rayleigh scattering coefficient
+        sr = (a * dppt / (awl**4) / ns * 1.0e+16) * 1.0e+05
+
+        # Add layer contribution (layer thickness * scattering coefficient)
+        tray += (z[k+1] - z[k]) * sr
+
+    return tray
+
+
 __all__ = [
     'chand',
     'scatra',
     'iso',
+    'odrayl',
 ]
