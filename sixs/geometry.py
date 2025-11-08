@@ -422,6 +422,128 @@ def posmto(month, jday, tu, nc, nl):
                                     nl_center, nc_center, alti_km, deltax_deg, deltay_deg)
 
 
+def posnoa(month, jday, tu, nc, xlonan, hna, campm=1.0):
+    """
+    Calculate geometry for NOAA polar-orbiting satellite.
+
+    Uses orbital mechanics to calculate geographic coordinates and geometry
+    for NOAA sun-synchronous polar-orbiting satellites.
+
+    Parameters
+    ----------
+    month : int
+        Month (1-12)
+    jday : int
+        Day of month (1-31)
+    tu : float
+        Universal time (decimal hours)
+    nc : int
+        Column number in NOAA image (1-2048, with 1024 = nadir)
+    xlonan : float
+        Longitude of ascending node (degrees)
+    hna : float
+        Hour at ascending node - equator crossing time (decimal hours)
+    campm : float, optional
+        Platform multiplier: +1 for AM platform, -1 for PM platform (default: +1)
+
+    Returns
+    -------
+    asol : float
+        Solar zenith angle (degrees)
+    phi0 : float
+        Solar azimuth angle (degrees)
+    avis : float
+        Viewing zenith angle (degrees)
+    phiv : float
+        Viewing azimuth angle (degrees)
+    xlon : float
+        Scene longitude (degrees)
+    xlat : float
+        Scene latitude (degrees)
+
+    Notes
+    -----
+    Converted from Fortran POSNOA.f
+
+    NOAA satellites are in sun-synchronous polar orbits with:
+    - Orbital inclination: 98.96°
+    - Altitude: 860 km
+    - Scan swath: ±55.385° from nadir
+    - Image width: 2048 pixels
+
+    The algorithm uses orbital mechanics to compute:
+    1. Satellite position from orbital parameters
+    2. Earth location from scan geometry
+    3. Viewing angles from satellite-to-ground geometry
+    """
+    # Orbital parameters for NOAA-6
+    pi = 3.1415926
+    r = 860.0 / 6378.155              # Altitude ratio (dimensionless)
+    ai = 98.96 * pi / 180.0           # Orbit inclination (radians)
+    an = 360.0 * pi / (6119.0 * 180.0)  # Angular velocity (rad/s)
+
+    # Convert inputs to appropriate units
+    ylonan = xlonan * pi / 180.0      # Ascending node longitude (radians)
+    t = tu * 3600.0                   # Universal time (seconds)
+    hnam = hna * 3600.0               # Ascending node time (seconds)
+
+    # Time since ascending node
+    u = t - hnam
+    u = campm * u * an                # Orbital angle
+
+    # Scan angle from nadir
+    delt = ((nc - (2048.0 + 1.0) / 2.0) * 55.385 / ((2048.0 - 1.0) / 2.0))
+    delt = campm * delt * pi / 180.0
+
+    # Viewing zenith angle (satellite perspective)
+    avis = np.arcsin((1.0 + r) * np.sin(delt))
+    d = avis - delt  # Parallax correction
+
+    # Satellite-to-ground vector components
+    y = np.cos(d) * np.cos(ai) * np.sin(u) - np.sin(ai) * np.sin(d)
+    z = np.cos(d) * np.sin(ai) * np.sin(u) + np.cos(ai) * np.sin(d)
+
+    # Geographic latitude
+    ylat = np.arcsin(z)
+
+    # Geographic longitude calculation
+    cosy = np.cos(d) * np.cos(u) / np.cos(ylat)
+    siny = y / np.cos(ylat)
+    ylon = np.arcsin(siny)
+
+    # Adjust longitude quadrant
+    if cosy <= 0.0:
+        if siny > 0.0:
+            ylon = pi - ylon
+        else:
+            ylon = -(pi + ylon)
+
+    # Account for Earth rotation and ascending node longitude
+    ylo1 = ylon + ylonan - (t - hnam) * 2.0 * pi / 86400.0
+
+    xlat = ylat * 180.0 / pi
+    xlon = ylo1 * 180.0 / pi
+
+    # Calculate solar position
+    asol, phi0 = possol(month, jday, tu, xlon, xlat)
+
+    # Calculate viewing azimuth angle
+    zlat = np.arcsin(np.sin(ai) * np.sin(u))
+    zlon = np.arctan2(np.cos(ai) * np.sin(u), np.cos(u))
+
+    if nc != 1024:  # Not at nadir
+        xnum = np.sin(zlon - ylon) * np.cos(zlat) / np.sin(np.abs(d))
+        xden = (np.sin(zlat) - np.sin(ylat) * np.cos(d)) / np.cos(ylat) / np.sin(np.abs(d))
+        phiv = np.arctan2(xnum, xden)
+    else:
+        phiv = 0.0
+
+    phiv = phiv * 180.0 / pi
+    avis = np.abs(avis) * 180.0 / pi
+
+    return asol, phi0, avis, phiv, xlon, xlat
+
+
 __all__ = [
     'possol',
     'day_number',
@@ -434,4 +556,5 @@ __all__ = [
     'posge',
     'posgw',
     'posmto',
+    'posnoa',
 ]

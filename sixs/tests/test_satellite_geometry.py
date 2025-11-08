@@ -9,7 +9,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/user/6S')
 
-from sixs.geometry import posspo, poslan, posge, posgw, posmto
+from sixs.geometry import posspo, poslan, posge, posgw, posmto, posnoa
 
 
 def test_posspo_basic():
@@ -413,6 +413,206 @@ def test_all_geostationary_satellites():
     assert -80 < xlon_ge < -70   # GOES East at 75°W
     assert -140 < xlon_gw < -130  # GOES West at 135°W
     assert -5 < xlon_mt < 5       # Meteosat at 0°E
+
+
+def test_posnoa_basic():
+    """Test NOAA polar-orbiting satellite geometry calculation."""
+    # NOAA-6 parameters for a typical equator crossing
+    month = 6
+    jday = 15
+    tu = 14.0           # Universal time (14:00 UTC)
+    nc = 1024           # Nadir pixel (center)
+    xlonan = -75.0      # Longitude of ascending node
+    hna = 14.0          # Hour at ascending node (equator crossing)
+
+    asol, phi0, avis, phiv, xlon, xlat = posnoa(month, jday, tu, nc, xlonan, hna)
+
+    # All values should be finite
+    assert np.isfinite(asol)
+    assert np.isfinite(phi0)
+    assert np.isfinite(avis)
+    assert np.isfinite(phiv)
+    assert np.isfinite(xlon)
+    assert np.isfinite(xlat)
+
+    # Solar zenith should be reasonable
+    assert 0 <= asol <= 180
+
+    # At nadir, viewing angle should be close to zero
+    assert avis < 5
+
+    # At ascending node at equator crossing time, should be near equator
+    assert abs(xlat) < 10
+
+
+def test_posnoa_nadir_viewing():
+    """Test that NOAA nadir pixel has zero viewing azimuth."""
+    month = 6
+    jday = 15
+    tu = 12.0
+    nc = 1024  # Nadir pixel
+    xlonan = 0.0
+    hna = 12.0
+
+    asol, phi0, avis, phiv, xlon, xlat = posnoa(month, jday, tu, nc, xlonan, hna)
+
+    # Nadir should have zero viewing azimuth
+    assert phiv == 0.0
+
+    # Viewing zenith should be very small at nadir
+    assert avis < 1.0
+
+
+def test_posnoa_off_nadir():
+    """Test NOAA off-nadir viewing geometry."""
+    month = 6
+    jday = 15
+    tu = 12.0
+    xlonan = 0.0
+    hna = 12.0
+
+    # Test several off-nadir pixels
+    test_pixels = [1500, 1700, 500]
+
+    for nc in test_pixels:
+        asol, phi0, avis, phiv, xlon, xlat = posnoa(month, jday, tu, nc, xlonan, hna)
+
+        # Off-nadir should have non-zero viewing angle
+        assert avis > 0
+
+        # Viewing angle should be reasonable (within scan range)
+        assert 0 < avis < 60  # Max scan is ±55.385°
+
+        # Viewing azimuth should be defined
+        assert np.isfinite(phiv)
+
+
+def test_posnoa_edge_pixels():
+    """Test NOAA at edge of scan swath."""
+    month = 6
+    jday = 15
+    tu = 12.0
+    xlonan = 0.0
+    hna = 12.0
+
+    # Edge pixels (max scan angle ~55°)
+    nc_edge1 = 1  # Left edge
+    nc_edge2 = 2048  # Right edge
+
+    asol1, phi01, avis1, phiv1, xlon1, xlat1 = posnoa(month, jday, tu, nc_edge1, xlonan, hna)
+    asol2, phi02, avis2, phiv2, xlon2, xlat2 = posnoa(month, jday, tu, nc_edge2, xlonan, hna)
+
+    # Both edges should have large viewing angles
+    assert avis1 > 40
+    assert avis2 > 40
+
+    # Viewing angles should be similar at both edges
+    assert abs(avis1 - avis2) < 5
+
+    # Longitudes should be different (opposite sides)
+    assert xlon1 != xlon2
+
+
+def test_posnoa_orbital_mechanics():
+    """Test NOAA orbital mechanics calculations."""
+    month = 6
+    jday = 21  # Summer solstice - better sun coverage
+    xlonan = 0.0
+    hna = 12.0
+    nc = 1024
+
+    # Test at different times (different positions in orbit)
+    # Use times close to ascending node to ensure daylight
+    times = [12.0, 12.1, 12.2, 12.3]
+    latitudes = []
+
+    for tu in times:
+        try:
+            _, _, _, _, _, xlat = posnoa(month, jday, tu, nc, xlonan, hna)
+            latitudes.append(xlat)
+        except ValueError:
+            # Sun below horizon - skip this time
+            pass
+
+    # Should have gotten some valid results
+    assert len(latitudes) > 0
+
+    # All latitudes should be valid
+    for lat in latitudes:
+        assert -90 <= lat <= 90
+
+
+def test_posnoa_am_vs_pm_platform():
+    """Test NOAA AM vs PM platform differences."""
+    month = 6
+    jday = 15
+    tu = 12.0
+    nc = 1024
+    xlonan = 0.0
+    hna = 12.0
+
+    # AM platform (campm = +1)
+    asol_am, phi0_am, avis_am, phiv_am, xlon_am, xlat_am = posnoa(
+        month, jday, tu, nc, xlonan, hna, campm=1.0)
+
+    # PM platform (campm = -1)
+    asol_pm, phi0_pm, avis_pm, phiv_pm, xlon_pm, xlat_pm = posnoa(
+        month, jday, tu, nc, xlonan, hna, campm=-1.0)
+
+    # Solar angles might differ due to different ground locations
+    # But viewing angles at nadir should be similar
+    assert abs(avis_am - avis_pm) < 1.0
+
+    # Locations may differ due to orbital direction
+    # All values should be valid
+    assert -180 <= xlon_am <= 180
+    assert -180 <= xlon_pm <= 180
+    assert -90 <= xlat_am <= 90
+    assert -90 <= xlat_pm <= 90
+
+
+def test_posnoa_scan_symmetry():
+    """Test that NOAA scan is symmetric around nadir."""
+    month = 6
+    jday = 15
+    tu = 12.0
+    xlonan = 0.0
+    hna = 12.0
+
+    # Symmetric pixels around nadir (1024)
+    offset = 200
+    nc_left = 1024 - offset
+    nc_right = 1024 + offset
+
+    _, _, avis_left, _, _, _ = posnoa(month, jday, tu, nc_left, xlonan, hna)
+    _, _, avis_right, _, _, _ = posnoa(month, jday, tu, nc_right, xlonan, hna)
+
+    # Viewing angles should be similar for symmetric pixels
+    assert abs(avis_left - avis_right) < 1.0
+
+
+def test_posnoa_latitude_bounds():
+    """Test that NOAA polar orbit reaches high latitudes."""
+    # Test at a time when satellite is far from equator
+    month = 6
+    jday = 21  # Summer solstice
+    xlonan = 0.0
+    hna = 12.0
+    nc = 1024
+
+    # Sample various times to find high latitudes (daytime observations only)
+    max_lat = 0
+    for tu in np.linspace(11.5, 13.5, 30):
+        try:
+            _, _, _, _, _, xlat = posnoa(month, jday, tu, nc, xlonan, hna)
+            max_lat = max(max_lat, abs(xlat))
+        except ValueError:
+            # Sun below horizon - skip this time
+            continue
+
+    # Polar orbits should reach moderate to high latitudes during daytime
+    # Conservative threshold since we're filtering for daylight only
+    assert max_lat > 30
 
 
 if __name__ == '__main__':
